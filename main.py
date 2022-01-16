@@ -20,8 +20,8 @@ if os.path.exists(path):
 try:
     TOKEN = base64.b64decode(os.environ.get('TOKEN')).decode('utf-8')
 except Exception as ex:
-    logging.error(f'Probably not found .env file'
-                  f'\nEXCEPTION: {ex}')
+    logging.error(f'Probably not found .env file\nEXCEPTION: {ex}')
+    exit(0)
 
 
 def start(update, context):
