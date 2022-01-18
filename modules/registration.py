@@ -6,22 +6,7 @@ from telegram.ext import (
 
 
 from modules.prepared_answers import REGISTRATION_START_MSG
-
-
-def not_registered(func):
-    def decorated_func(update: Update, context: CallbackContext):
-        if 'is_registered' not in context.user_data or \
-                not context.user_data['is_registered']:
-            return func(update, context)
-        return just_for_not_registered_msg(update, context)
-
-    return decorated_func
-
-
-def just_for_not_registered_msg(update: Update, context: CallbackContext):
-    context.bot.send_message(update.effective_chat.id,
-                             text='Эта возможность предумотрена только для '
-                                  'незарегистрированных пользователей')
+from tools.decorators import not_registered_users
 
 
 class RegistrationDialog(ConversationHandler):
@@ -37,7 +22,7 @@ class RegistrationDialog(ConversationHandler):
         )
 
     @staticmethod
-    @not_registered
+    @not_registered_users
     def start(update: Update, context: CallbackContext):
         context.user_data['is_registered'] = False
 
