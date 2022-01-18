@@ -1,57 +1,43 @@
 # Импортируем необходимые классы.
-import base64
-import os
 import logging
-from dotenv import load_dotenv
-from telegram import ReplyKeyboardRemove
+import datetime as dt
+from telegram import (
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+    KeyboardButton,
+    Update,
+)
 
 from telegram.ext import Updater, MessageHandler, Filters
 from telegram.ext import CallbackContext, CommandHandler
 
+from modules.location import Location, FindLocationDialog
 from modules.prepared_answers import *
+from modules.registration import RegistrationDialog
+from tools.tools import get_from_env
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)s %(name)s %(message)s')
 
-path = os.path.join(os.path.dirname(__file__), '.env')
-if os.path.exists(path):
-    load_dotenv(path)
-# Loading Token
-try:
-    TOKEN = base64.b64decode(os.environ.get('TOKEN')).decode('utf-8')
-except Exception as ex:
-    logging.error(f'Probably not found .env file\nEXCEPTION: {ex}')
-    exit(0)
 
-
-def start(update, context):
-    # TODO Добавление пользователя в бд. Проверка на существование.
-    print(f"{update.effective_user.id} - {update.effective_user.first_name}")
-    context.bot.send_message(update.effective_chat.id, text=START_MSG)
-
-
-def unknown(update, context):
+def unknown(update: Update, context: CallbackContext):
     context.bot.send_message(chat_id=update.effective_chat.id,
-                             text="Извините, я не понимял эту команду.")
+                             text="Извините, я не понял эту команду.")
 
 
-def help_msg(update, context):
+def help_msg(update: Update, context: CallbackContext):
     update.message.reply_text(HELP_MSG)
 
 
-# Определяем функцию-обработчик сообщений.
-# У неё два параметра, сам бот и класс updater, принявший сообщение.
-def echo(update, context):
-    # У объекта класса Updater есть поле message,
-    # являющееся объектом сообщения.
-    # У message есть поле text, содержащее текст полученного сообщения,
-    # а также метод reply_text(str),
-    # отсылающий ответ пользователю, от которого получено сообщение.
-    print(update.message.text)
+def echo(update: Update, context: CallbackContext):
+    date: dt.datetime = update.message.date
+    print(date, end=' - ')
+    print(date.hour, date.tzinfo)
+    print(update.message.location)
     update.message.reply_text(update.message.text)
 
 
-def remove_job_if_exists(name, context):
+def remove_job_if_exists(name, context: CallbackContext):
     """Удаляем задачу по имени.
     Возвращаем True если задача была успешно удалена."""
     current_jobs = context.job_queue.get_jobs_by_name(name)
@@ -62,7 +48,7 @@ def remove_job_if_exists(name, context):
     return True
 
 
-def set_timer(update, context):
+def set_timer(update: Update, context: CallbackContext):
     """Добавляем задачу в очередь"""
     chat_id = update.message.chat_id
     try:
@@ -91,20 +77,20 @@ def set_timer(update, context):
         update.message.reply_text('Использование: /set <секунд>')
 
 
-def task(context):
+def task(context: CallbackContext):
     """Выводит сообщение"""
     job = context.job
     context.bot.send_message(job.context, text='Вернулся!')
 
 
-def unset_timer(update, context):
+def unset_timer(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     job_removed = remove_job_if_exists(str(chat_id), context)
     text = 'Хорошо, вернулся сейчас!' if job_removed else 'Нет активного таймера'
     update.message.reply_text(text)
 
 
-def close_keyboard(update, context):
+def close_keyboard(update: Update, context: CallbackContext):
     update.message.reply_text(
         "Ok",
         reply_markup=ReplyKeyboardRemove()
@@ -112,11 +98,12 @@ def close_keyboard(update, context):
 
 
 def main():
-    updater = Updater(TOKEN, use_context=True)
+    updater = Updater(get_from_env('TOKEN'), use_context=True)
 
     dp = updater.dispatcher
 
-    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(RegistrationDialog())
+    dp.add_handler(FindLocationDialog())
 
     dp.add_handler(CommandHandler("set", set_timer,
                                   pass_args=True,
@@ -125,11 +112,13 @@ def main():
     dp.add_handler(CommandHandler("unset", unset_timer,
                                   pass_chat_data=True))
     dp.add_handler(CommandHandler("help", help_msg))
+
     dp.add_handler(CommandHandler("close", close_keyboard))
 
     dp.add_handler(MessageHandler(Filters.command, unknown))
 
     dp.add_handler(MessageHandler(Filters.text, echo))
+    dp.add_handler(MessageHandler(Filters.location, Location.add_location))
     updater.start_polling()
     # Ждём завершения приложения.
     # (например, получения сигнала SIG_TERM при нажатии клавиш Ctrl+C)
