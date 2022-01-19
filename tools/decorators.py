@@ -3,21 +3,20 @@ from telegram.ext import CallbackContext
 
 
 def not_registered_users(func):
-    def decorated_func(*args, **kwargs):
-        context = args[2]
+    def decorated_func(update: Update, context: CallbackContext):
         if 'is_registered' not in context.user_data or \
                 not context.user_data['is_registered']:
-            return func(*args, **kwargs)
-        return just_for_not_registered_msg(*args, **kwargs)
+            return func(update, context)
+        return just_for_not_registered_msg(update, context)
 
     return decorated_func
 
 
 def registered_users(func):
-    def decorated_func(*args, **kwargs):
+    def decorated_func(update: Update, context: CallbackContext):
         if 'is_registered' in context.user_data \
                 and context.user_data['is_registered']:
-            return func(*args, **kwargs)
+            return func(update, context)
         return just_for_registered_msg(update, context)
 
     return decorated_func

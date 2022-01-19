@@ -1,5 +1,5 @@
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, \
-    InlineKeyboardMarkup, InlineKeyboardButton
+    InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRemove
 from telegram.ext import (
     CallbackContext, ConversationHandler, CommandHandler, MessageHandler,
     Filters, CallbackQueryHandler,
@@ -26,13 +26,14 @@ from tools.decorators import not_registered_users
     # ADDING_PERSONAL_CODE
     # ...
     START_OVER,
+    LOCATION_OVER,
     REGISTRATION_OVER,
 
     TYPING_CODE,
     END_REGISTRATION,
     STOPPING,
     RETURN
-) = map(chr, range(15))
+) = map(chr, range(16))
 # Different states
 
 # Shortcut for ConversationHandler.END
@@ -49,6 +50,7 @@ class StartDialog(ConversationHandler):
         super().__init__(entry_points=e_points, states=st, fallbacks=fallbacks)
 
     @staticmethod
+    @not_registered_users
     def start(update: Update, context: CallbackContext):
         context.user_data['is_registered'] = False
 
@@ -69,13 +71,18 @@ class StartDialog(ConversationHandler):
             update.callback_query.edit_message_text(text=text,
                                                     reply_markup=keyboard)
         else:
-            update.message.reply_text(START_MSG)
+            update.message.reply_text(
+                START_MSG, reply_markup=ReplyKeyboardRemove())
             update.message.reply_text(text=text, reply_markup=keyboard)
         context.user_data[START_OVER] = False
         return START_SELECTORS
 
     @staticmethod
     def stop(update: Update, context: CallbackContext):
+        keyboard = ReplyKeyboardMarkup([['/start']])
+        update.message.reply_text(text='Регистрация прервана.\nЧтобы повторно '
+                                       'начать регистрацию отправьте:\n/start',
+                                  reply_markup=keyboard)
         return END
 
 
@@ -110,6 +117,7 @@ class RegistrationDialog(ConversationHandler):
         ]
         map_to_parent = {
             RETURN: START_SELECTORS,
+            END: END
         }
         super().__init__(entry_points=e_points, states=st, fallbacks=fallbacks,
                          map_to_parent=map_to_parent)
@@ -144,29 +152,25 @@ class RegistrationDialog(ConversationHandler):
         keyboard = InlineKeyboardMarkup(buttons)
         if context.user_data['get_address'] and context.user_data['get_code']:
             location = context.user_data.get('location')
-            text = \
-                f'Нажмите "Завершить регистрацию", ' \
-                f'чтобы завершить регистрацию.\n' \
-                f'Ваш код: {context.user_data["get_code"]}\n' \
-                f'Ваше местоположение: ' \
-                f'{location if location else "Нет адреса"} ' \
-                f'- ({context.user_data["longitude"]}, ' \
-                f'{context.user_data["latitude"]})'
+            text = f'Нажмите "Завершить регистрацию", ' \
+                   f'чтобы завершить регистрацию.\n' \
+                   f'Ваш код: {context.user_data["get_code"]}\n' \
+                   f'Ваше местоположение: ' \
+                   f'{location if location else "Нет адреса"} ' \
+                   f'- ({context.user_data["longitude"]}, ' \
+                   f'{context.user_data["latitude"]})'
         elif context.user_data['get_address'] and \
                 not context.user_data['get_code']:
             location = context.user_data.get('location')
-            text = \
-                f'Чтобы закончить регистрацию добавьте Ваш ' \
-                f'персональный код.\n' \
-                f'Ваше местоположение: ' \
-                f'{location if location else "Нет адреса"} ' \
-                f'- ({context.user_data["longitude"]}, ' \
-                f'{context.user_data["latitude"]})'
+            text = f'Чтобы закончить регистрацию добавьте Ваш ' \
+                   f'персональный код.\nВаше местоположение: ' \
+                   f'{location if location else "Нет адреса"} ' \
+                   f'- ({context.user_data["longitude"]}, ' \
+                   f'{context.user_data["latitude"]})'
         elif not context.user_data['get_address'] \
                 and context.user_data['get_code']:
             text = f'Чтобы закончить регистрацию добавьте Вашe ' \
-                   f'местоположение.\n' \
-                   f'Ваш код: {context.user_data["get_code"]}'
+                   f'местоположение.\nВаш код: {context.user_data["get_code"]}'
         else:
             text = 'Чтобы закончить регистрацию добавьте Ваш ' \
                    'персональный код и местоположение.'
@@ -177,6 +181,7 @@ class RegistrationDialog(ConversationHandler):
                                                     reply_markup=keyboard)
         else:
             update.message.reply_text(text=text, reply_markup=keyboard)
+
         context.user_data[REGISTRATION_OVER] = False
         return PATIENT_REGISTRATION_ACTION
 
@@ -200,19 +205,28 @@ class RegistrationDialog(ConversationHandler):
 
     @staticmethod
     def end_reg(update: Update, context: CallbackContext):
+        context.user_data['is_registered'] = True
         update.callback_query.answer()
 
         text = 'Вы успешно вошли в аккаунт!'
-        update.callback_query.edit_message_text(text=text)
+        update.callback_query.delete_message()
+
+        # TODO добавить кнопки для обычного общения с системой
+        keyboard = ReplyKeyboardMarkup(
+            [['/help', '/settings']],
+            row_width=1, resize_keyboard=True)
+
+        context.bot.send_message(
+            update.effective_chat.id, text=text, reply_markup=keyboard)
         return END
 
     @staticmethod
     def stop(update: Update, context: CallbackContext):
+        StartDialog.stop(update, context)
         return END
 
     @staticmethod
     def return_to_start(update: Update, context: CallbackContext):
         context.user_data[START_OVER] = True
         StartDialog.start(update, context)
-
         return RETURN
