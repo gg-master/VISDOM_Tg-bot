@@ -7,17 +7,16 @@ from modules.prepared_answers import BAD_GEOCODER_RESP
 from tools.decorators import not_registered_users, registered_users
 from tools.tools import get_from_env
 
+from modules.start_dialogs import ADDING_LOCATION, EDITING_LOCATION, END, \
+    PATIENT_REGISTRATION_ACTION, REGISTRATION_OVER
+
 
 class Location:
     @staticmethod
-    @not_registered_users
-    def add_location(update: Update, context: CallbackContext):
-        # Добавление локации из геопозиции для незарегистрированных юзеров
-        pass
-
-    @staticmethod
     def find_location(update: Update, context: CallbackContext):
         # Поиск локации в яндексе. Перед добавлением
+        context.user_data['location'] = update.message.text
+
         geocoder_uri = "http://geocode-maps.yandex.ru/1.x/"
         response = requests.get(geocoder_uri, params={
             "apikey": get_from_env('GEOCODER_T'),
@@ -64,17 +63,16 @@ class Location:
 
 class FindLocationDialog(ConversationHandler, Location):
     def __init__(self, *args, **kwargs):
-
+        # MessageHandler(Filters.regex("^Добавить местоположение$"),
+        #                self.start_find
+        e_points = [CallbackQueryHandler(self.start_find,
+                                         pattern=f'^{ADDING_LOCATION}$')]
         super(FindLocationDialog, self).__init__(
-            entry_points=[
-                MessageHandler(Filters.regex("^Добавить местоположение$"),
-                               self.start_find),
-                MessageHandler(Filters.regex("^Изменить местоположение$"),
-                               self.change_location),
-                # CommandHandler('find_location', self.start_find)
-            ],
+            entry_points=e_points if not kwargs else kwargs.get('e_points'),
+
             states={
-                1: [MessageHandler(Filters.text, self.input_address)],
+                1: [MessageHandler(Filters.text, self.input_address),
+                    MessageHandler(Filters.location, self.location_response)],
                 2: [MessageHandler(Filters.text, self.find_response)],
                 3: [MessageHandler(
                     Filters.regex('^Да, верно$|^Нет, неверно$'),
@@ -83,15 +81,14 @@ class FindLocationDialog(ConversationHandler, Location):
             },
             fallbacks=[CommandHandler('stop', self.stop)],
             map_to_parent={
-                self.END: 2
+                END: PATIENT_REGISTRATION_ACTION
             },
-            *args, **kwargs
-
         )
 
-    @not_registered_users
+    # @not_registered_users
     def start_find(self, update: Update, context: CallbackContext):
-        keyboard = ReplyKeyboardMarkup(
+
+        kboard = ReplyKeyboardMarkup(
             [
                 [KeyboardButton(text="Отправить геолокацию",
                                 request_location=True)],
@@ -99,26 +96,12 @@ class FindLocationDialog(ConversationHandler, Location):
             ],
             row_width=1, resize_keyboard=True, one_time_keyboard=True)
 
+        update.callback_query.answer()
+        update.callback_query.delete_message()
         context.bot.send_message(
             update.effective_chat.id,
             text='Выберите способ добавления местоположения',
-            reply_markup=keyboard)
-        return 1
-
-    @registered_users
-    def change_location(self, update: Update, context: CallbackContext):
-        keyboard = ReplyKeyboardMarkup(
-            [
-                [KeyboardButton(text="Отправить геолокацию",
-                                request_location=True)],
-                ['Найти адрес']
-            ],
-            row_width=1, resize_keyboard=True, one_time_keyboard=True)
-
-        context.bot.send_message(
-            update.effective_chat.id,
-            text='Выберите способ добавления местоположения',
-            reply_markup=keyboard)
+            reply_markup=kboard)
         return 1
 
     @staticmethod
@@ -152,12 +135,50 @@ class FindLocationDialog(ConversationHandler, Location):
         return self.END
 
     def location_response(self, update: Update, context: CallbackContext):
+        from modules.start_dialogs import RegistrationDialog
         response = update.message.text
-        if 'Нет, неверно' in response:
+        location = update.message.location
+        if response and 'Нет, неверно' in response:
             return self.start_find(update, context)
-        elif 'Да, верно' in response:
-            print(context.user_data['longitude'], context.user_data['latitude'])
-        return self.END
+        elif (response and 'Да, верно' in response) or location:
+            context.user_data['get_address'] = \
+                context.user_data[REGISTRATION_OVER] = True
+            if location:
+                context.user_data['longitude'] = location.longitude
+                context.user_data['latitude'] = location.latitude
+            print(context.user_data['longitude'],
+                  context.user_data['latitude'])
+            RegistrationDialog.patient_registration(update, context)
+        return END
 
-    def stop(self, update: Update, context: CallbackContext):
-        return self.END
+    @staticmethod
+    def stop(update: Update, context: CallbackContext):
+        return END
+
+
+class ChangeLocationDialog(FindLocationDialog):
+    def __init__(self):
+        super(ChangeLocationDialog, self).__init__(e_points=[
+            CallbackQueryHandler(self.change_location,
+                                 pattern=f'^{EDITING_LOCATION}$'),
+            MessageHandler(Filters.regex("^Изменить местоположение$"),
+                           self.change_location)
+        ]
+        )
+
+    # @registered_users
+    def change_location(self, update: Update, context: CallbackContext):
+        context.user_data['location'] = None
+        keyboard = ReplyKeyboardMarkup(
+            [
+                [KeyboardButton(text="Отправить геолокацию",
+                                request_location=True)],
+                ['Найти адрес']
+            ],
+            row_width=1, resize_keyboard=True, one_time_keyboard=True)
+
+        context.bot.send_message(
+            update.effective_chat.id,
+            text='Выберите способ добавления местоположения',
+            reply_markup=keyboard)
+        return 1
