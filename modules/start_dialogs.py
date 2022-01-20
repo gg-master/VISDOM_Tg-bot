@@ -32,10 +32,10 @@ from tools.decorators import not_registered_users
     TYPING_CODE,
     END_REGISTRATION,
     STOPPING,
-    RETURN
-) = map(chr, range(16))
-# Different states
 
+) = map(chr, range(15))
+# Different states
+RETURN = 'RETURN'
 # Shortcut for ConversationHandler.END
 END = ConversationHandler.END
 
@@ -44,7 +44,8 @@ class StartDialog(ConversationHandler):
     def __init__(self):
         e_points = [CommandHandler('start', self.start)]
         st = {
-            START_SELECTORS: [RegistrationDialog()],
+            START_SELECTORS: [PatientRegistrationDialog(),
+                              CC1RegistrationDialog()],
         }
         fallbacks = [CommandHandler('stop', self.stop)]
         super().__init__(entry_points=e_points, states=st, fallbacks=fallbacks)
@@ -86,15 +87,11 @@ class StartDialog(ConversationHandler):
         return END
 
 
-class RegistrationDialog(ConversationHandler):
+class PatientRegistrationDialog(ConversationHandler):
     def __init__(self):
         from modules.location import FindLocationDialog, ChangeLocationDialog
-        e_points = [
-            CallbackQueryHandler(self.patient_registration,
-                                 pattern=f'^{SIGN_UP_AS_PATIENT}$'),
-            CallbackQueryHandler(self.cc1_registration,
-                                 pattern=f'^{SIGN_UP_AS_CC1}$')
-        ]
+        e_points = [CallbackQueryHandler(self.patient_registration,
+                                         pattern=f'^{SIGN_UP_AS_PATIENT}$')]
         st = {
             PATIENT_REGISTRATION_ACTION: [
                 CallbackQueryHandler(
@@ -106,21 +103,13 @@ class RegistrationDialog(ConversationHandler):
             ],
             TYPING_CODE: [
                 MessageHandler(Filters.text & ~Filters.command, self.save_code)
-            ],
-            CC1_REGISTRATION_ACTION: [
-
-            ],
+            ]
         }
         fallbacks = [
-            CommandHandler('stop', self.stop),
+            CommandHandler('stop', StartDialog.stop),
             CallbackQueryHandler(self.return_to_start, pattern=f'^{RETURN}$')
         ]
-        map_to_parent = {
-            RETURN: START_SELECTORS,
-            END: END
-        }
-        super().__init__(entry_points=e_points, states=st, fallbacks=fallbacks,
-                         map_to_parent=map_to_parent)
+        super().__init__(entry_points=e_points, states=st, fallbacks=fallbacks)
 
     # @not_registered_users
 
@@ -186,10 +175,6 @@ class RegistrationDialog(ConversationHandler):
         return PATIENT_REGISTRATION_ACTION
 
     @staticmethod
-    def cc1_registration(update: Update, context: CallbackContext):
-        return CC1_REGISTRATION_ACTION
-
-    @staticmethod
     def add_code(update: Update, context: CallbackContext):
         update.callback_query.answer()
 
@@ -201,7 +186,7 @@ class RegistrationDialog(ConversationHandler):
     def save_code(update: Update, context: CallbackContext):
         context.user_data['get_code'] = update.message.text
         context.user_data[REGISTRATION_OVER] = True
-        return RegistrationDialog.patient_registration(update, context)
+        return PatientRegistrationDialog.patient_registration(update, context)
 
     @staticmethod
     def end_reg(update: Update, context: CallbackContext):
@@ -221,12 +206,28 @@ class RegistrationDialog(ConversationHandler):
         return END
 
     @staticmethod
-    def stop(update: Update, context: CallbackContext):
-        StartDialog.stop(update, context)
-        return END
-
-    @staticmethod
     def return_to_start(update: Update, context: CallbackContext):
         context.user_data[START_OVER] = True
         StartDialog.start(update, context)
-        return RETURN
+        return END
+
+
+class CC1RegistrationDialog(ConversationHandler):
+    def __init__(self):
+        e_points = [CallbackQueryHandler(self.cc1_registration,
+                                         pattern=f'^{SIGN_UP_AS_CC1}$')]
+        st = {
+            CC1_REGISTRATION_ACTION: [
+
+            ],
+        }
+        fallbacks = [
+            CommandHandler('stop', StartDialog.stop),
+            CallbackQueryHandler(PatientRegistrationDialog.return_to_start,
+                                 pattern=f'^{RETURN}$')
+        ]
+        super().__init__(entry_points=e_points, states=st, fallbacks=fallbacks)
+
+    @staticmethod
+    def cc1_registration(update: Update, context: CallbackContext):
+        return CC1_REGISTRATION_ACTION

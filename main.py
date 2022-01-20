@@ -8,7 +8,7 @@ from telegram import (
     Update,
 )
 
-from telegram.ext import Updater, MessageHandler, Filters
+from telegram.ext import Updater, MessageHandler, Filters, Defaults
 from telegram.ext import CallbackContext, CommandHandler
 
 from modules.location import Location, FindLocationDialog
@@ -98,7 +98,9 @@ def close_keyboard(update: Update, context: CallbackContext):
 
 
 def main():
-    updater = Updater(get_from_env('TOKEN'), use_context=True)
+    updater = Updater(get_from_env('TOKEN'),
+                      use_context=True,
+                      defaults=Defaults(run_async=True))
 
     dp = updater.dispatcher
 

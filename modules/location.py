@@ -11,10 +11,8 @@ from tools.tools import get_from_env
 from modules.start_dialogs import (
     ADDING_LOCATION,
     EDITING_LOCATION,
-    PATIENT_REGISTRATION_ACTION,
     REGISTRATION_OVER,
     LOCATION_OVER,
-    RETURN,
     END,
 )
 
@@ -106,11 +104,7 @@ class FindLocationDialog(ConversationHandler, Location):
                                    self.location_response)],
 
             },
-            fallbacks=[CommandHandler('stop', self.stop)],
-            map_to_parent={
-                RETURN: PATIENT_REGISTRATION_ACTION,
-                END: END
-            },
+            fallbacks=[CommandHandler('stop', self.stop)]
         )
 
     @staticmethod
@@ -147,7 +141,7 @@ class FindLocationDialog(ConversationHandler, Location):
 
     @staticmethod
     def location_response(update: Update, context: CallbackContext):
-        from modules.start_dialogs import RegistrationDialog
+        from modules.start_dialogs import PatientRegistrationDialog
         response = update.message.text
         location = update.message.location
 
@@ -166,8 +160,8 @@ class FindLocationDialog(ConversationHandler, Location):
             print(context.user_data['longitude'],
                   context.user_data['latitude'])
 
-            RegistrationDialog.patient_registration(update, context)
-        return RETURN
+            PatientRegistrationDialog.patient_registration(update, context)
+        return END
 
     @staticmethod
     def stop(update: Update, context: CallbackContext):
