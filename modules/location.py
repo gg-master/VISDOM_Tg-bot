@@ -40,7 +40,7 @@ class Location:
     @staticmethod
     def find_location(update: Update, context: CallbackContext):
         # Поиск локации в яндексе. Перед добавлением
-        context.user_data['location'] = update.message.text
+        context.user_data['get_location'] = update.message.text
 
         geocoder_uri = "http://geocode-maps.yandex.ru/1.x/"
         response = requests.get(geocoder_uri, params={
@@ -150,15 +150,12 @@ class FindLocationDialog(ConversationHandler, Location):
             return FindLocationDialog.start_find(update, context)
 
         elif (response and 'Да, верно' in response) or location:
-            context.user_data['get_address'] = \
-                context.user_data[REGISTRATION_OVER] = True
+            context.user_data[REGISTRATION_OVER] = True
 
             if location:
+                context.user_data['get_location'] = 'Нет адреса'
                 context.user_data['longitude'] = location.longitude
                 context.user_data['latitude'] = location.latitude
-
-            print(context.user_data['longitude'],
-                  context.user_data['latitude'])
 
             PatientRegistrationDialog.patient_registration(update, context)
         return END
@@ -183,6 +180,6 @@ class ChangeLocationDialog(FindLocationDialog):
     # @registered_users
     @staticmethod
     def start_find(update: Update, context: CallbackContext):
-        context.user_data['location'] = None
+        context.user_data['get_location'] = False
         Location.start_find(update, context)
         return 1

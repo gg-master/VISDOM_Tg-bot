@@ -5,7 +5,7 @@ from telegram.ext import (
     Filters, CallbackQueryHandler,
 )
 
-from modules.prepared_answers import START_MSG
+from modules.prepared_answers import START_MSG, SUCCESSFUL_REG
 from tools.decorators import not_registered_users
 
 (
@@ -35,7 +35,7 @@ from tools.decorators import not_registered_users
 
 ) = map(chr, range(15))
 # Different states
-RETURN = 'RETURN'
+
 # Shortcut for ConversationHandler.END
 END = ConversationHandler.END
 
@@ -107,7 +107,7 @@ class PatientRegistrationDialog(ConversationHandler):
         }
         fallbacks = [
             CommandHandler('stop', StartDialog.stop),
-            CallbackQueryHandler(self.return_to_start, pattern=f'^{RETURN}$')
+            CallbackQueryHandler(self.return_to_start, pattern=f'^{END}$')
         ]
         super().__init__(entry_points=e_points, states=st, fallbacks=fallbacks)
 
@@ -116,53 +116,50 @@ class PatientRegistrationDialog(ConversationHandler):
     @staticmethod
     def patient_registration(update: Update, context: CallbackContext):
         if not context.user_data.get(REGISTRATION_OVER):
-            context.user_data['get_address'] = False
+            context.user_data['get_location'] = False
             context.user_data['get_code'] = False
 
-        buttons = [
-            [InlineKeyboardButton(text="Завершить регистрацию",
-                                  callback_data=f'{END_REGISTRATION}')]
-            if context.user_data['get_address'] and
-               context.user_data['get_code'] else '',
-            [InlineKeyboardButton(text='Добавить код',
-                                  callback_data=f'{ADDING_CODE}') if
-             not context.user_data['get_code'] else
-             InlineKeyboardButton(text='Изменить код',
-                                  callback_data=f'{EDITING_CODE}'),
-
-             InlineKeyboardButton(text='Добавить местоположение',
-                                  callback_data=f'{ADDING_LOCATION}') if
-             not context.user_data['get_address'] else
-             InlineKeyboardButton(text='Изменить местоположение',
-                                  callback_data=f'{EDITING_LOCATION}')],
-            [InlineKeyboardButton(text='Назад',
-                                  callback_data=f'{RETURN}')]
-        ]
-        keyboard = InlineKeyboardMarkup(buttons)
-        if context.user_data['get_address'] and context.user_data['get_code']:
-            location = context.user_data.get('location')
+        location = context.user_data.get('get_location')
+        code = context.user_data.get('get_code')
+        if location and code:
             text = f'Нажмите "Завершить регистрацию", ' \
                    f'чтобы завершить регистрацию.\n' \
-                   f'Ваш код: {context.user_data["get_code"]}\n' \
+                   f'Ваш код: {code}\n' \
                    f'Ваше местоположение: ' \
-                   f'{location if location else "Нет адреса"} ' \
-                   f'- ({context.user_data["longitude"]}, ' \
+                   f'{location} - ({context.user_data["longitude"]}, ' \
                    f'{context.user_data["latitude"]})'
-        elif context.user_data['get_address'] and \
-                not context.user_data['get_code']:
-            location = context.user_data.get('location')
+
+        elif location and not code:
             text = f'Чтобы закончить регистрацию добавьте Ваш ' \
                    f'персональный код.\nВаше местоположение: ' \
                    f'{location if location else "Нет адреса"} ' \
                    f'- ({context.user_data["longitude"]}, ' \
                    f'{context.user_data["latitude"]})'
-        elif not context.user_data['get_address'] \
-                and context.user_data['get_code']:
+        elif not location and code:
             text = f'Чтобы закончить регистрацию добавьте Вашe ' \
-                   f'местоположение.\nВаш код: {context.user_data["get_code"]}'
+                   f'местоположение.\nВаш код: {code}'
         else:
             text = 'Чтобы закончить регистрацию добавьте Ваш ' \
                    'персональный код и местоположение.'
+
+        buttons = [
+            [InlineKeyboardButton(text="Завершить регистрацию",
+                                  callback_data=f'{END_REGISTRATION}')]
+            if location and code else '',
+            [InlineKeyboardButton(text='Добавить код',
+                                  callback_data=f'{ADDING_CODE}')
+             if not code else
+             InlineKeyboardButton(text='Изменить код',
+                                  callback_data=f'{EDITING_CODE}'),
+
+             InlineKeyboardButton(text='Добавить местоположение',
+                                  callback_data=f'{ADDING_LOCATION}')
+             if not location else
+             InlineKeyboardButton(text='Изменить местоположение',
+                                  callback_data=f'{EDITING_LOCATION}')],
+            [InlineKeyboardButton(text='Назад', callback_data=f'{END}')]
+        ]
+        keyboard = InlineKeyboardMarkup(buttons)
 
         if not context.user_data.get(REGISTRATION_OVER):
             update.callback_query.answer()
@@ -191,15 +188,15 @@ class PatientRegistrationDialog(ConversationHandler):
     @staticmethod
     def end_reg(update: Update, context: CallbackContext):
         context.user_data['is_registered'] = True
-        update.callback_query.answer()
 
-        text = 'Вы успешно вошли в аккаунт!'
+        text = SUCCESSFUL_REG
+
+        update.callback_query.answer()
         update.callback_query.delete_message()
 
         # TODO добавить кнопки для обычного общения с системой
         keyboard = ReplyKeyboardMarkup(
-            [['/help', '/settings']],
-            row_width=1, resize_keyboard=True)
+            [['/help', '/settings']], row_width=1, resize_keyboard=True)
 
         context.bot.send_message(
             update.effective_chat.id, text=text, reply_markup=keyboard)
@@ -224,10 +221,25 @@ class CC1RegistrationDialog(ConversationHandler):
         fallbacks = [
             CommandHandler('stop', StartDialog.stop),
             CallbackQueryHandler(PatientRegistrationDialog.return_to_start,
-                                 pattern=f'^{RETURN}$')
+                                 pattern=f'^{END}$')
         ]
         super().__init__(entry_points=e_points, states=st, fallbacks=fallbacks)
 
     @staticmethod
     def cc1_registration(update: Update, context: CallbackContext):
+        text = 'Регистрация персонала. (В разработке)'
+
+        buttons = [
+            [InlineKeyboardButton(text='Назад', callback_data=f'{END}')]
+        ]
+        keyboard = InlineKeyboardMarkup(buttons)
+
+        if not context.user_data.get(REGISTRATION_OVER):
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(text=text,
+                                                    reply_markup=keyboard)
+        else:
+            update.message.reply_text(text=text, reply_markup=keyboard)
+
+        context.user_data[REGISTRATION_OVER] = False
         return CC1_REGISTRATION_ACTION
