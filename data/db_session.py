@@ -20,7 +20,7 @@ def global_init():
 
     if __factory:
         return
-    os.chdir('..')
+    # os.chdir('..')
     db_address = get_from_env('DB_ADDRESS')
     # if os.path.exists(path):
     #     load_dotenv(path)
@@ -39,7 +39,7 @@ def global_init():
     engine = sa.create_engine(conn_str, echo=False, poolclass=NullPool)
     __factory = orm.sessionmaker(bind=engine)
 
-    import __all_models
+    from . import __all_models
 
     SqlAlchemyBase.metadata.create_all(engine)
 

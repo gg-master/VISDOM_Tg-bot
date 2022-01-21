@@ -1,1 +1,1 @@
-import patient
+from . import patient

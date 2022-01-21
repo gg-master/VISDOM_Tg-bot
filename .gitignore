@@ -1,3 +1,5 @@
+/alembic
 /venv
 .idea
 .env
+/alembic.ini
