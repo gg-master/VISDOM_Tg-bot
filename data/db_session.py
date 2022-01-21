@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 import sqlalchemy.ext.declarative as dec
 import logging
 from sqlalchemy.pool import NullPool
+from tools.tools import get_from_env
 
 
 SqlAlchemyBase = dec.declarative_base()
@@ -19,28 +20,26 @@ def global_init():
 
     if __factory:
         return
-
-    # if not db_file or not db_file.strip():
-    #     raise Exception("Необходимо указать файл базы данных.")
-    #
-    # path = os.path.join(os.path.dirname(__package__), '.env')
+    os.chdir('..')
+    db_address = get_from_env('DB_ADDRESS')
     # if os.path.exists(path):
     #     load_dotenv(path)
     # try:
-    #     db_pass = os.environ.get('DB_PASS')
-    #     if db_pass is None:
+    #     db_address = os.environ.get('DB_ADDRESS')
+    #     if db_address is None:
     #         raise AttributeError("param DB_PASS is 'NoneType'")
     # except Exception as ex:
     #     logging.error(f'Probably not found .env file'
     #                   f'\nEXCEPTION: {ex}')
     #     return None
-    conn_str = f'mysql+pymysql://root:BENQgw2270@127.0.0.1:3306/my_db_visdom'
+
+    conn_str = db_address
     # print(f"Подключение к базе данных по адресу {conn_str}")
     logging.info(f"Подключение к базе данных по адресу {conn_str}")
     engine = sa.create_engine(conn_str, echo=False, poolclass=NullPool)
     __factory = orm.sessionmaker(bind=engine)
 
-    # from . import __all_models
+    import __all_models
 
     SqlAlchemyBase.metadata.create_all(engine)
 
