@@ -99,12 +99,11 @@ def close_keyboard(update: Update, context: CallbackContext):
 
 def main():
     updater = Updater(get_from_env('TOKEN'),
-                      use_context=True,
-                      defaults=Defaults(run_async=True))
+                      use_context=True, defaults=Defaults(run_async=True))
 
     dp = updater.dispatcher
 
-    dp.add_handler(StartDialog().handler)
+    dp.add_handler(StartDialog())
 
     dp.add_handler(CommandHandler("set", set_timer,
                                   pass_args=True,

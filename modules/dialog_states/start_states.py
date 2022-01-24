@@ -32,7 +32,7 @@ START_SELECTORS, SIGN_UP_AS_PATIENT, SIGN_UP_AS_CC1 = map(chr, range(3))
     LOCATION_OVER,
     REGISTRATION_OVER,
     CONF_TZ_OVER,
+    STOPPING,
+    BACK
+) = map(chr, range(11, 17))
 
-
-) = map(chr, range(11, 15))
-STOPPING = "STOPPING"

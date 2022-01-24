@@ -8,15 +8,42 @@ from modules.prepared_answers import BAD_GEOCODER_RESP
 from tools.decorators import not_registered_users, registered_users
 from tools.tools import get_from_env
 
-from modules.start_dialogs import (
+from modules.dialog_states.start_states import (
+    PATIENT_REGISTRATION_ACTION,
+    REGISTRATION_OVER,
     CONF_LOCATION,
-    CONF_TZ_OVER,
     LOCATION_OVER,
-    END, STOPPING,
+    END,
 )
 
 
 class Location:
+    def __init__(self, time_delta=None, location: dict = None):
+        self.time_delta = time_delta
+        self.location = location
+
+    def get_time_delta(self):
+        return self.time_delta
+
+    def set_time_delta(self, delta):
+        self.location = None
+        self.time_delta = delta
+
+    def get_location(self):
+        return self.location
+
+    def set_location(self, address, lon, lat):
+        self.time_delta = None
+        self.location[address] = [lon, lat]
+
+    def __str__(self):
+        if self.location and not self.time_delta:
+            address = list(self.location.keys())[0]
+            return f'{address} - ({self.location[address][0]}, ' \
+                   f'{self.location[address][1]})'
+        elif self.time_delta and not self.location:
+            return f'{self.time_delta}'
+
     @staticmethod
     def find_location(update: Update, context: CallbackContext):
         # Поиск локации в яндексе.
@@ -55,17 +82,20 @@ class Location:
             f"&spn={spn}&l=map&" \
             f"pt={','.join([toponym_longitude, toponym_lattitude])},vkbkm"
 
-        context.user_data['location'] = \
-            {update.message.text: [toponym_longitude, toponym_lattitude]}
+        context.user_data['location'] = Location(
+            location={update.message.text:
+                          [toponym_longitude, toponym_lattitude]})
+
         return static_api_request
 
 
-class FindLocationDialog(ConversationHandler, Location):
+class FindLocationDialog(ConversationHandler):
     def __init__(self, *args, **kwargs):
-        e_points = [CallbackQueryHandler(self.start_find,
-                                         pattern=f'^{CONF_LOCATION}$')]
-        super(FindLocationDialog, self).__init__(
-            entry_points=e_points if not kwargs else kwargs.get('e_points'),
+        from modules.start_dialogs import StartDialog
+        super().__init__(
+            entry_points=[CallbackQueryHandler(
+                self.start, pattern=f'^{CONF_LOCATION}$')]
+            if not kwargs else kwargs.get('e_points'),
 
             states={
                 1: [MessageHandler(Filters.regex('^Найти адрес$'),
@@ -74,17 +104,17 @@ class FindLocationDialog(ConversationHandler, Location):
                 2: [MessageHandler(Filters.text & ~Filters.command,
                                    self.find_response)],
                 3: [MessageHandler(Filters.regex('^Да, верно$|^Нет, неверно$'),
-                                   self.location_response)],
-
+                                   self.location_response, run_async=False)],
             },
-            fallbacks=[CommandHandler('stop', self.stop)],
+            fallbacks=[CommandHandler('stop', StartDialog.stop)],
             map_to_parent={
-                STOPPING: STOPPING
+                PATIENT_REGISTRATION_ACTION: END,
+                END: END,
             }
         )
 
     @staticmethod
-    def start_find(update: Update, context: CallbackContext):
+    def start(update: Update, context: CallbackContext):
         context.user_data['location'] = None
 
         kboard = ReplyKeyboardMarkup(
@@ -139,20 +169,15 @@ class FindLocationDialog(ConversationHandler, Location):
 
         if response and 'Нет, неверно' in response:
             context.user_data[LOCATION_OVER] = True
-            return FindLocationDialog.start_find(update, context)
+            return FindLocationDialog.start(update, context)
 
         elif (response and 'Да, верно' in response) or location:
-            context.user_data[CONF_TZ_OVER] = True
+            # Returning to second level patient registration conv.
+            context.user_data[REGISTRATION_OVER] = True
 
             if location:
-                context.user_data['location'] = {
-                    'Нет адреса': [location.longitude, location.latitude]}
+                context.user_data['location'] = Location(
+                    location={'Нет адреса': [location.longitude,
+                                             location.latitude]})
 
-            PatientRegistrationDialog.patient_registration(update, context)
-        return END
-
-    @staticmethod
-    def stop(update: Update, context: CallbackContext):
-        from modules.start_dialogs import StartDialog
-        StartDialog.stop(update, context)
-        return STOPPING
+        return PatientRegistrationDialog.start(update, context)

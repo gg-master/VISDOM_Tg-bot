@@ -362,7 +362,7 @@ def main() -> None:
             SELECTING_ACTION: selection_handlers,
             SELECTING_LEVEL: selection_handlers,
             DESCRIBING_SELF: [description_conv],
-            # STOPPING: [CommandHandler('start', start)],
+            STOPPING: [CommandHandler('start', start)],
         },
         fallbacks=[CommandHandler('stop', stop)],
     )

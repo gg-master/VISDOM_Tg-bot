@@ -10,19 +10,19 @@ from modules.dialog_states.start_states import *
 from tools.decorators import not_registered_users
 
 
-class StartDialog:
+class StartDialog(ConversationHandler):
     def __init__(self):
-        self.handler = ConversationHandler(
-            name='StartDialog',
+        super().__init__(
+            name=self.__class__.__name__,
             entry_points=[CommandHandler('start', self.start)],
             states={
-                START_SELECTORS: [PatientRegistrationDialog().handler,
-                                  CC1RegistrationDialog()]
+                START_SELECTORS: [PatientRegistrationDialog(),
+                                  CC1RegistrationDialog()],
             },
             fallbacks=[CommandHandler('stop', self.stop)])
 
     @staticmethod
-    # @not_registered_users
+    @not_registered_users
     def start(update: Update, context: CallbackContext):
         context.user_data['is_registered'] = False
 
@@ -57,13 +57,21 @@ class StartDialog:
                                   reply_markup=keyboard)
         return END
 
+    @staticmethod
+    def stop_nested(update: Update, context: CallbackContext):
+        keyboard = ReplyKeyboardMarkup([['/start']])
+        update.message.reply_text(text='Регистрация прервана.\nЧтобы повторно '
+                                       'начать регистрацию отправьте:\n/start',
+                                  reply_markup=keyboard)
+        return STOPPING
 
-class PatientRegistrationDialog:
+
+class PatientRegistrationDialog(ConversationHandler):
     def __init__(self):
-        self.handler = ConversationHandler(
+        super().__init__(
             name='PatientRegistrationDialog',
             entry_points=[CallbackQueryHandler(
-                self.patient_registration, pattern=f'^{SIGN_UP_AS_PATIENT}$')],
+                self.start, pattern=f'^{SIGN_UP_AS_PATIENT}$')],
             states={
                 PATIENT_REGISTRATION_ACTION: [
                     ConfigureTZDialog(),
@@ -77,8 +85,8 @@ class PatientRegistrationDialog:
                 ],
             },
             fallbacks=[
-                CallbackQueryHandler(self.return_to_start, pattern=f'^{END}$'),
-                CommandHandler('stop', self.stop),
+                CallbackQueryHandler(self.back_to_start, pattern=f'^{BACK}$'),
+                CommandHandler('stop', StartDialog.stop_nested, run_async=False),
             ],
             map_to_parent={
                 STOPPING: END
@@ -86,21 +94,16 @@ class PatientRegistrationDialog:
         )
 
     @staticmethod
-    def patient_registration(update: Update, context: CallbackContext):
+    def start(update: Update, context: CallbackContext):
         location = context.user_data.get('location')
         code = context.user_data.get('code')
         if location and code:
             text = f'Нажмите "Завершить регистрацию", ' \
                    f'чтобы завершить регистрацию.\n' \
-                   f'Ваш код: {code}\nВаш часовой пояс: ' \
-                   f'{location} - ({context.user_data["longitude"]}, ' \
-                   f'{context.user_data["latitude"]})'
-
+                   f'Ваш код: {code}\nВаш часовой пояс: {location}'
         elif location and not code:
             text = f'Чтобы закончить регистрацию добавьте Ваш ' \
-                   f'персональный код.\nВаш часовой пояс: ' \
-                   f'{location} - ({context.user_data["longitude"]}, ' \
-                   f'{context.user_data["latitude"]})'
+                   f'персональный код.\nВаш часовой пояс: {location}'
         elif not location and code:
             text = f'Чтобы закончить регистрацию добавьте Ваш ' \
                    f'часовой пояс.\nВаш код: {code}'
@@ -114,13 +117,12 @@ class PatientRegistrationDialog:
             if location and code else '',
 
             [InlineKeyboardButton(text='Добавить код' if not code else
-            'Изменить код', callback_data=f'{CONF_CODE}'),
+             'Изменить код', callback_data=f'{CONF_CODE}'),
 
              InlineKeyboardButton(text='Добавить часовой пояс' if not location
-             else 'Изменить часовой пояс',
-                                  callback_data=f'{CONF_TZ}')],
+             else 'Изменить часовой пояс', callback_data=f'{CONF_TZ}')],
 
-            [InlineKeyboardButton(text='Назад', callback_data=f'{END}')]
+            [InlineKeyboardButton(text='Назад', callback_data=f'{BACK}')]
         ]
         keyboard = InlineKeyboardMarkup(buttons)
 
@@ -146,7 +148,7 @@ class PatientRegistrationDialog:
     def save_code(update: Update, context: CallbackContext):
         context.user_data['code'] = update.message.text
         context.user_data[REGISTRATION_OVER] = True
-        return PatientRegistrationDialog.patient_registration(update, context)
+        return PatientRegistrationDialog.start(update, context)
 
     @staticmethod
     def end_reg(update: Update, context: CallbackContext):
@@ -166,34 +168,34 @@ class PatientRegistrationDialog:
         return END
 
     @staticmethod
-    def return_to_start(update: Update, context: CallbackContext):
+    def back_to_start(update: Update, context: CallbackContext):
         context.user_data[START_OVER] = True
         StartDialog.start(update, context)
         return END
-
-    @staticmethod
-    def stop(update: Update, context: CallbackContext):
-        print('stopped')
-        return STOPPING
 
 
 class ConfigureTZDialog(ConversationHandler):
     def __init__(self):
         from modules.location import FindLocationDialog
-        e_points = [CallbackQueryHandler(self.start, pattern=f'^{CONF_TZ}$')]
-        st = {
-            CONF_TZ_ACTION: [
-                FindLocationDialog(),
-                CallbackQueryHandler(self.conf_tz, pattern=f'^{CONF_TZ}$')
+        super().__init__(
+            entry_points=[
+                CallbackQueryHandler(self.start, pattern=f'^{CONF_TZ}$')],
+            states={
+                CONF_TZ_ACTION: [
+                    FindLocationDialog(),
+                    CallbackQueryHandler(self.conf_tz, pattern=f'^{CONF_TZ}$')
+                ],
+                TYPING_TZ: [
+                    MessageHandler(Filters.text & ~Filters.command,
+                                   self.save_tz)
+                ]
+            },
+            fallbacks=[
+                CallbackQueryHandler(self.back_to_reg, pattern=f'^{BACK}$'),
+                CommandHandler('stop', StartDialog.stop_nested, run_async=False)
             ],
-            TYPING_TZ: [
-                MessageHandler(Filters.text & ~Filters.command, self.save_tz)
-            ]
-        }
-        fallbacks = [
-            CommandHandler('stop', StartDialog.stop)
-        ]
-        super().__init__(entry_points=e_points, states=st, fallbacks=fallbacks)
+            map_to_parent={STOPPING: STOPPING}
+        )
 
     @staticmethod
     def start(update: Update, context: CallbackContext):
@@ -203,17 +205,17 @@ class ConfigureTZDialog(ConversationHandler):
         location = context.user_data.get('location')
         buttons = [
             [
-                InlineKeyboardButton(text='Ввести число'
-                if not location or type(location) is str
-                else 'Изменить число',
-                                     callback_data=f'{TYPING_TZ}'),
+                InlineKeyboardButton(
+                    text='Ввести число' if not location or not
+                    location.get_time_delta()
+                    else 'Изменить число', callback_data=f'{CONF_TZ}'),
 
-                InlineKeyboardButton(text='Указать местоположение'
-                if not location or type(location) is dict
-                else 'Изменить местоположение',
-                                     callback_data=f'{CONF_LOCATION}')
+                InlineKeyboardButton(
+                    text='Указать местоположение' if not location or not
+                    location.get_location() else 'Изменить местоположение',
+                    callback_data=f'{CONF_LOCATION}')
             ],
-            [InlineKeyboardButton(text='Назад', callback_data=f'{END}')]
+            [InlineKeyboardButton(text='Назад', callback_data=f'{BACK}')]
         ]
         keyboard = InlineKeyboardMarkup(buttons)
 
@@ -237,23 +239,30 @@ class ConfigureTZDialog(ConversationHandler):
 
     @staticmethod
     def save_tz(update: Update, context: CallbackContext):
+        from modules.location import Location
         msg = update.message.text
 
-        if msg[0] in ('+', '-') and msg[1:].isdigit():
+        if msg[0] not in ('+', '-') or not msg[1:].isdigit():
+            context.user_data[CONF_TZ_OVER] = True
             text = 'Часовой пояс был введен в неправильном формате. ' \
                    'Попробуйте снова.'
             update.message.reply_text(text=text)
             return ConfigureTZDialog.start(update, context)
 
-        context.user_data['location'] = msg
+        context.user_data['location'] = Location(time_delta=msg)
         context.user_data[REGISTRATION_OVER] = True
-        PatientRegistrationDialog.patient_registration(update, context)
+        PatientRegistrationDialog.start(update, context)
+        return END
+
+    @staticmethod
+    def back_to_reg(update: Update, context: CallbackContext):
+        PatientRegistrationDialog.start(update, context)
         return END
 
 
 class CC1RegistrationDialog(ConversationHandler):
     def __init__(self):
-        e_points = [CallbackQueryHandler(self.cc1_registration,
+        e_points = [CallbackQueryHandler(self.start,
                                          pattern=f'^{SIGN_UP_AS_CC1}$')]
         st = {
             CC1_REGISTRATION_ACTION: [
@@ -262,13 +271,13 @@ class CC1RegistrationDialog(ConversationHandler):
         }
         fallbacks = [
             CommandHandler('stop', StartDialog.stop),
-            CallbackQueryHandler(PatientRegistrationDialog.return_to_start,
+            CallbackQueryHandler(PatientRegistrationDialog.back_to_start,
                                  pattern=f'^{END}$')
         ]
         super().__init__(entry_points=e_points, states=st, fallbacks=fallbacks)
 
     @staticmethod
-    def cc1_registration(update: Update, context: CallbackContext):
+    def start(update: Update, context: CallbackContext):
         text = 'Регистрация персонала. (В разработке)'
 
         buttons = [
