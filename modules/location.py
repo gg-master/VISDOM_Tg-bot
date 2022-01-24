@@ -8,11 +8,12 @@ from modules.prepared_answers import BAD_GEOCODER_RESP
 from tools.decorators import not_registered_users, registered_users
 from tools.tools import get_from_env
 
-from modules.dialog_states.start_states import (
+from modules.dialogs_shortcuts.start_shortcuts import (
     PATIENT_REGISTRATION_ACTION,
     REGISTRATION_OVER,
     CONF_LOCATION,
     LOCATION_OVER,
+    STOPPING,
     END,
 )
 
@@ -106,10 +107,11 @@ class FindLocationDialog(ConversationHandler):
                 3: [MessageHandler(Filters.regex('^Да, верно$|^Нет, неверно$'),
                                    self.location_response, run_async=False)],
             },
-            fallbacks=[CommandHandler('stop', StartDialog.stop)],
+            fallbacks=[CommandHandler('stop', StartDialog.stop_nested,
+                                      run_async=False)],
             map_to_parent={
                 PATIENT_REGISTRATION_ACTION: END,
-                END: END,
+                STOPPING: STOPPING,
             }
         )
 

@@ -1,0 +1,55 @@
+from telegram.ext import ConversationHandler
+
+# Shortcut for ConversationHandler.END
+END = ConversationHandler.END
+
+(
+    # State definitions for top level conversation
+    START_SELECTORS,
+    # Constants
+    SIGN_UP_AS_PATIENT, SIGN_UP_AS_CC1
+) = map(chr, range(3))
+
+(
+    # State definitions for patient registration conversation
+    PATIENT_REGISTRATION_ACTION,
+    TYPING_CODE,
+    # Constants
+    CONF_NOTIFICATIONS,
+    CONF_CODE,
+    CONF_TZ,
+) = map(chr, range(3, 8))
+
+(
+    # States for Time Zone settings
+    CONF_TZ_ACTION,
+    TYPING_TZ,
+    # Constants
+    CONF_LOCATION
+) = map(chr, range(8, 11))
+
+(
+    # States for Notification settings
+    CONF_NOTIF_ACTIONS,
+    TIME_CHANGE,
+    # Constants
+    MORNING_TIME,
+    EVENING_TIME
+) = map(chr, range(10, 14))
+
+(
+    # State definitions for specialist (CC1) registration conversation
+    CC1_REGISTRATION_ACTION,
+) = map(chr, range(14, 15))
+
+(
+    # Other states
+    STOPPING,
+    # Other constants
+    START_OVER,
+    LOCATION_OVER,
+    REGISTRATION_OVER,
+    CONF_TZ_OVER,
+    FINISH_REGISTRATION,
+) = map(chr, range(15, 21))
+
