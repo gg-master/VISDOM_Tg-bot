@@ -104,8 +104,7 @@ def main():
 
     dp = updater.dispatcher
 
-    dp.add_handler(StartDialog())
-    # dp.add_handler(FindLocationDialog())
+    dp.add_handler(StartDialog().handler)
 
     dp.add_handler(CommandHandler("set", set_timer,
                                   pass_args=True,
