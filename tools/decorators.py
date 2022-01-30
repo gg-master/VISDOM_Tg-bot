@@ -4,7 +4,8 @@ from telegram.ext import CallbackContext
 
 def not_registered_users(func):
     def decorated_func(update: Update, context: CallbackContext):
-        if not context.user_data.get('is_registered'):
+        user = context.user_data.get('user')
+        if not (user and user.registered()):
             return func(update, context)
         return just_for_not_registered_msg(update, context)
 
@@ -13,7 +14,8 @@ def not_registered_users(func):
 
 def registered_users(func):
     def decorated_func(update: Update, context: CallbackContext):
-        if context.user_data.get('is_registered'):
+        user = context.user_data.get('user')
+        if user and user.registered():
             return func(update, context)
         return just_for_registered_msg(update, context)
 
