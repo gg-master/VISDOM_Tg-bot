@@ -1,8 +1,9 @@
 import sqlalchemy
+from sqlalchemy import orm
 from .db_session import SqlAlchemyBase
 
 
-class Record(SqlAlchemyBase):
+class RecordModel(SqlAlchemyBase):
     __tablename__ = 'record'
 
     id = sqlalchemy.Column(sqlalchemy.Integer, autoincrement=True,
@@ -12,8 +13,10 @@ class Record(SqlAlchemyBase):
     dias_press = sqlalchemy.Column(sqlalchemy.Integer)
     heart_rate = sqlalchemy.Column(sqlalchemy.Integer)
     time_zone = sqlalchemy.Column(sqlalchemy.Integer)
-    # accept_time = sqlalchemy.Column(sqlalchemy.Integer,
-    #                                 sqlalchemy.ForeignKey('accept_time.id'))
+    accept_time_id = sqlalchemy.Column(sqlalchemy.Integer,
+                                    sqlalchemy.ForeignKey('accept_time.id'))
+    accept_time = orm.relation('AcceptTimeModel')
+
 
 
 
