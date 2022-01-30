@@ -11,13 +11,13 @@ association_table = sqlalchemy.Table(
                       sqlalchemy.ForeignKey('patronage.id')))
 
 
-class PatronageModel(SqlAlchemyBase):
+class Patronage(SqlAlchemyBase):
     __tablename__ = 'patronage'
 
     id = sqlalchemy.Column(sqlalchemy.Integer, autoincrement=True,
                            primary_key=True)
     chat_id = sqlalchemy.Column(sqlalchemy.Integer)
-    patient = orm.relation('PatientModel', secondary='patients_has_patronage',
+    patient = orm.relation('Patient', secondary='patients_has_patronage',
                            back_populates='patronage')
 
 

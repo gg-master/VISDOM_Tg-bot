@@ -3,7 +3,7 @@ from sqlalchemy import orm
 from .db_session import SqlAlchemyBase
 
 
-class RecordModel(SqlAlchemyBase):
+class Record(SqlAlchemyBase):
     __tablename__ = 'record'
 
     id = sqlalchemy.Column(sqlalchemy.Integer, autoincrement=True,
@@ -15,7 +15,7 @@ class RecordModel(SqlAlchemyBase):
     time_zone = sqlalchemy.Column(sqlalchemy.Integer)
     accept_time_id = sqlalchemy.Column(sqlalchemy.Integer,
                                     sqlalchemy.ForeignKey('accept_time.id'))
-    accept_time = orm.relation('AcceptTimeModel')
+    accept_time = orm.relation('AcceptTime')
 
 
 
