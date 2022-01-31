@@ -21,6 +21,24 @@ def get_from_env(item):
         exit(0)
 
 
+def convert_tz(coords=None, tz_offset=None) -> str:
+    import pytz
+    from tzwhere import tzwhere
+    from datetime import datetime, timedelta
+
+    if coords and not tz_offset:
+        tz = tzwhere.tzwhere(forceTZ=True)
+        timezone_str = tz.tzNameAt(*coords, forceTZ=True)
+        return timezone_str
+    else:
+        utc_offset = timedelta(hours=int(tz_offset))
+        now = datetime.now(pytz.utc)
+        all_tz = list(
+            {tz.zone for tz in map(pytz.timezone, pytz.all_timezones_set)
+             if now.astimezone(tz).utcoffset() == utc_offset})
+        return all_tz[0]
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-T', '--token',
