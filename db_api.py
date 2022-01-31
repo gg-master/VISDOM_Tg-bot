@@ -31,6 +31,10 @@ def get_patient_by_chat_id(chat_id: int) -> Patient:
     return db_sess.query(Patient).filter(Patient.chat_id == chat_id).first()
 
 
+def get_all_patients():
+    return db_sess.query(Patient.chat_id, AcceptTime.time).join(AcceptTime).all()
+
+
 def change_patients_time_zone(chat_id: int, time_zone: int) -> None:
     patient = get_patient_by_chat_id(chat_id)
     patient.time_zone = time_zone
