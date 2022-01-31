@@ -11,7 +11,7 @@ class Patient(SqlAlchemyBase):
     name = sqlalchemy.Column(sqlalchemy.String(45))
     user_code = sqlalchemy.Column(sqlalchemy.String(45),
                                   unique=True)
-    time_zone = sqlalchemy.Column(sqlalchemy.Integer)
+    time_zone = sqlalchemy.Column(sqlalchemy.String(45))
     chat_id = sqlalchemy.Column(sqlalchemy.Integer, unique=True)
     member = sqlalchemy.Column(sqlalchemy.Boolean, default=True)
     accept_time = orm.relation('AcceptTime', back_populates='patient')

@@ -12,7 +12,7 @@ class Record(SqlAlchemyBase):
     sys_press = sqlalchemy.Column(sqlalchemy.Integer)
     dias_press = sqlalchemy.Column(sqlalchemy.Integer)
     heart_rate = sqlalchemy.Column(sqlalchemy.Integer)
-    time_zone = sqlalchemy.Column(sqlalchemy.Integer)
+    time_zone = sqlalchemy.Column(sqlalchemy.String(45))
     accept_time_id = sqlalchemy.Column(sqlalchemy.Integer,
                                     sqlalchemy.ForeignKey('accept_time.id'))
     accept_time = orm.relation('AcceptTime')
