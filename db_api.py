@@ -20,18 +20,19 @@ def add_accept_time(time, patient: Patient) -> None:
     db_sess.commit()
 
 
-def add_patient(accept_time, **kwargs: Any) -> None:
+def add_patient(time_morn, time_even, **kwargs: Any) -> None:
     patient = Patient(**kwargs)
     db_sess.add(patient)
     db_sess.commit()
-    add_accept_time(accept_time, patient)
+    add_accept_time(time_morn, patient)
+    add_accept_time(time_even, patient)
 
 
 def get_patient_by_chat_id(chat_id: int) -> Patient:
     return db_sess.query(Patient).filter(Patient.chat_id == chat_id).first()
 
 
-def get_all_patients():
+def get_all_patients() -> list:
     return db_sess.query(Patient.chat_id, AcceptTime.time).join(AcceptTime).all()
 
 
