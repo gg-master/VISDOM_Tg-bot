@@ -1,17 +1,12 @@
 # Импортируем необходимые классы.
 import logging
 import datetime as dt
-from telegram import (
-    ReplyKeyboardMarkup,
-    ReplyKeyboardRemove,
-    KeyboardButton,
-    Update,
-)
 
 from telegram.ext import Updater, MessageHandler, Filters, Defaults
-from telegram.ext import CallbackContext, CommandHandler
+from telegram.ext import CommandHandler
 
-from modules.prepared_answers import *
+from modules.restore import Restore
+from tools.prepared_answers import *
 from modules.start_dialogs import StartDialog
 from modules.smart_timer import *
 from tools.tools import get_from_env
@@ -34,6 +29,7 @@ def echo(update: Update, context: CallbackContext):
     print(date, end=' - ')
     print(date.hour, date.tzinfo)
     print(update.message.location)
+    print(update.message.chat_id, '-', update.effective_user.id, '-', update.effective_chat.id)
     update.message.reply_text(update.message.text)
 
 
@@ -43,12 +39,16 @@ def main():
 
     dp = updater.dispatcher
 
+    # Восстановление уведомлений после перезапуска бота для зарегистрированных
+    # пользователей
+    Restore(dp)
+
     dp.add_handler(StartDialog())
 
-    dp.add_handler(CommandHandler("set", set_timer,
-                                  pass_args=True,
-                                  pass_job_queue=True,
-                                  pass_chat_data=True))
+    # dp.add_handler(CommandHandler("set", set_timer,
+    #     #                               pass_args=True,
+    #     #                               pass_job_queue=True,
+    #     #                               pass_chat_data=True))
 
     # dp.add_handler(CommandHandler("unset", unset_timer,
     #                               pass_chat_data=True))

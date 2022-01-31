@@ -42,14 +42,34 @@ def set_timer(update: Update, context: CallbackContext, time):
         context.bot.send_message(chat_id, 'Использование: /set <секунд>')
 
 
+def set_timer_by_context(context, time):
+    chat_id = 721698752
+    try:
+        # args[0] должен содержать значение аргумента
+        # (секунды таймера)
+        context.bot.send_message(
+            chat_id, 'Реинсталл времени')
+        due = int(time)
+
+        # Добавляем задачу в очередь
+        # и останавливаем предыдущую (если она была)
+        job_removed = remove_job_if_exists(str(chat_id), context)
+        context.job_queue.run_once(
+            task,
+            due,
+            context=chat_id,
+            name=str(chat_id)
+        )
+        text = f'Вернусь через {due} секунд!'
+        if job_removed:
+            text += ' Старая задача удалена.'
+        # Присылаем сообщение о том, что всё получилось.
+        context.bot.send_message(chat_id, text)
+    except (IndexError, ValueError):
+        context.bot.send_message(chat_id, 'Использование: /set <секунд>')
+
+
 def task(context: CallbackContext):
     """Выводит сообщение"""
     job = context.job
     context.bot.send_message(job.context, text='Вернулся!')
-
-
-def unset_timer(update: Update, context: CallbackContext):
-    chat_id = update.message.chat_id
-    job_removed = remove_job_if_exists(str(chat_id), context)
-    text = 'Хорошо, вернулся сейчас!' if job_removed else 'Нет активного таймера'
-    update.message.reply_text(text)

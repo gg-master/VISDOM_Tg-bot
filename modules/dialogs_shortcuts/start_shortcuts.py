@@ -32,12 +32,12 @@ END = ConversationHandler.END
     # States for Notification settings
     CONF_NOTIF_ACTIONS,
     TIME_CHANGE,
-) = map(chr, range(10, 12))
+) = map(chr, range(11, 13))
 
 (
     # State definitions for specialist (CC1) registration conversation
     CC1_REGISTRATION_ACTION,
-) = map(chr, range(12, 13))
+) = map(chr, range(13, 14))
 
 (
     # Other states
@@ -48,5 +48,5 @@ END = ConversationHandler.END
     REGISTRATION_OVER,
     CONF_TZ_OVER,
     FINISH_REGISTRATION,
-) = map(chr, range(13, 19))
+) = map(chr, range(14, 20))
 

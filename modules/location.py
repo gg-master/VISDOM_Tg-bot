@@ -1,11 +1,10 @@
 import requests
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, \
-    ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import CallbackContext, ConversationHandler, CommandHandler, \
-    MessageHandler, Filters, CallbackQueryHandler
+    ReplyKeyboardRemove
+from telegram.ext import CallbackContext, ConversationHandler, \
+    CommandHandler, MessageHandler, Filters, CallbackQueryHandler
 
-from modules.prepared_answers import BAD_GEOCODER_RESP
-from tools.decorators import not_registered_users, registered_users
+from tools.prepared_answers import BAD_GEOCODER_RESP
 from tools.tools import get_from_env
 
 from modules.dialogs_shortcuts.start_shortcuts import (
@@ -22,9 +21,8 @@ from modules.dialogs_shortcuts.start_shortcuts import (
 class Location:
     def __init__(self, tz=None, location: dict = None):
         self._time_zone = self.validate_tz(tz) if tz else tz
-        self._location = location
+        self._location = location  # {'address': [lat, lon]}
 
-    @property
     def time_zone(self):
         return self._time_zone
 
@@ -37,6 +35,11 @@ class Location:
 
     def location(self):
         return self._location
+
+    def get_coords(self):
+        if self._location:
+            return list(self._location.values())[0]
+        return None
 
     def __str__(self):
         if self._location and not self._time_zone:
@@ -51,6 +54,7 @@ class FindLocationDialog(ConversationHandler):
     def __init__(self, *args, **kwargs):
         from modules.start_dialogs import StartDialog
         super().__init__(
+            name=self.__class__.__name__,
             entry_points=[CallbackQueryHandler(
                 self.start, pattern=f'^{CONF_LOCATION}$')]
             if not kwargs else kwargs.get('e_points'),
@@ -58,7 +62,8 @@ class FindLocationDialog(ConversationHandler):
             states={
                 1: [MessageHandler(Filters.regex('^Найти адрес$'),
                                    self.input_address),
-                    MessageHandler(Filters.location, self.location_response),
+                    MessageHandler(Filters.location, self.location_response,
+                                   run_async=False),
                     MessageHandler(Filters.regex('^Назад$'),
                                    self.back_to_prev_level)],
                 2: [MessageHandler(Filters.text & ~Filters.command,

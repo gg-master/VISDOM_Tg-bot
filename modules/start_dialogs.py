@@ -1,4 +1,3 @@
-import datetime as dt
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, \
     InlineKeyboardButton, ReplyKeyboardRemove
 from telegram.ext import (
@@ -6,8 +5,8 @@ from telegram.ext import (
     Filters, CallbackQueryHandler,
 )
 
-from modules.obj_classes import User, Patient, Specialist
-from modules.prepared_answers import START_MSG
+from modules.users_classes import User, Patient
+from tools.prepared_answers import START_MSG
 from modules.dialogs_shortcuts.start_shortcuts import *
 from tools.decorators import not_registered_users
 
@@ -125,7 +124,7 @@ class PatientRegistrationDialog(ConversationHandler):
             if location and code else '',
 
             [InlineKeyboardButton(text='Добавить код' if not code else
-            'Изменить код', callback_data=f'{CONF_CODE}'),
+             'Изменить код', callback_data=f'{CONF_CODE}'),
 
              InlineKeyboardButton(text='Добавить часовой пояс' if not location
              else 'Изменить часовой пояс', callback_data=f'{CONF_TZ}')],
@@ -193,6 +192,7 @@ class ConfigureTZDialog(ConversationHandler):
     def __init__(self):
         from modules.location import FindLocationDialog
         super().__init__(
+            name=self.__class__.__name__,
             entry_points=[
                 CallbackQueryHandler(self.start, pattern=f'^{CONF_TZ}$')],
             states={
@@ -223,12 +223,12 @@ class ConfigureTZDialog(ConversationHandler):
             [
                 InlineKeyboardButton(
                     text='Ввести число' if not location or not
-                    location.time_zone else 'Изменить число',
+                    location.time_zone() else 'Изменить число',
                     callback_data=f'{CONF_TZ}'),
 
                 InlineKeyboardButton(
                     text='Указать местоположение' if not location or not
-                    location.time_zone else 'Изменить местоположение',
+                    location.location() else 'Изменить местоположение',
                     callback_data=f'{CONF_LOCATION}')
             ],
             [InlineKeyboardButton(text='Назад', callback_data=f'{END}')]
