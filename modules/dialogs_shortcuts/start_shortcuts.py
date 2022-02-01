@@ -36,7 +36,7 @@ END = ConversationHandler.END
 
 (
     # State definitions for specialist (CC1) registration conversation
-    CC1_REGISTRATION_ACTION,
+    PATRONAGE_REGISTRATION_ACTION,
 ) = map(chr, range(13, 14))
 
 (
