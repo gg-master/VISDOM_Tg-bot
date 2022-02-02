@@ -7,7 +7,7 @@ END = ConversationHandler.END
     # State definitions for top level conversation
     START_SELECTORS,
     # Constants
-    SIGN_UP_AS_PATIENT, SIGN_UP_AS_CC1
+    SIGN_UP_AS_PATIENT, SIGN_UP_AS_PATRONAGE
 ) = map(chr, range(3))
 
 (
@@ -36,7 +36,7 @@ END = ConversationHandler.END
 
 (
     # State definitions for specialist (CC1) registration conversation
-    CC1_REGISTRATION_ACTION,
+    PATRONAGE_REGISTRATION_ACTION,
 ) = map(chr, range(13, 14))
 
 (
@@ -49,4 +49,12 @@ END = ConversationHandler.END
     CONF_TZ_OVER,
     FINISH_REGISTRATION,
 ) = map(chr, range(14, 20))
+
+
+(
+    RECEIVE_TOKEN,
+    TYPING_TOKEN,
+    PATRONAGE_JOB,
+    DEFAULT_JOB
+) = map(chr, range(20, 24))
 

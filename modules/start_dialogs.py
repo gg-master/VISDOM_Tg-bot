@@ -9,6 +9,7 @@ from modules.users_classes import User, Patient
 from tools.prepared_answers import START_MSG
 from modules.dialogs_shortcuts.start_shortcuts import *
 from tools.decorators import not_registered_users
+from tools.tools import get_from_env
 
 
 class StartDialog(ConversationHandler):
@@ -18,7 +19,7 @@ class StartDialog(ConversationHandler):
             entry_points=[CommandHandler('start', self.start)],
             states={
                 START_SELECTORS: [PatientRegistrationDialog(),
-                                  CC1RegistrationDialog()],
+                                  PatronageRegistrationDialog()],
             },
             fallbacks=[CommandHandler('stop', self.stop)])
 
@@ -382,16 +383,26 @@ class ConfigureNotifTimeDialog(ConversationHandler):
         return END
 
 
-class CC1RegistrationDialog(ConversationHandler):
+class PatronageRegistrationDialog(ConversationHandler):
     def __init__(self):
         super().__init__(
             entry_points=[CallbackQueryHandler(self.start,
-                                               pattern=f'^{SIGN_UP_AS_CC1}$'),
-                          CommandHandler('reg_cc', self.start)],
+                                               pattern=f'^{SIGN_UP_AS_PATRONAGE}$'),
+                          CommandHandler('reg_patronage', self.start)],
             states={
-                CC1_REGISTRATION_ACTION: [
-
+                # PATRONAGE_REGISTRATION_ACTION: [
+                #     CallbackQueryHandler(self.get_token,
+                #                          pattern=f'^{RECEIVE_TOKEN}')
+                # ],
+                TYPING_TOKEN:[
+                    MessageHandler(Filters.text & ~Filters.command,
+                                   self.get_token)
                 ],
+                PATRONAGE_JOB: [
+                    CallbackQueryHandler(self.default_job,
+                                         pattern=f'^{DEFAULT_JOB}&')
+
+                ]
             },
             fallbacks=[
                 CommandHandler('stop', StartDialog.stop_nested,
@@ -406,20 +417,46 @@ class CC1RegistrationDialog(ConversationHandler):
 
     @staticmethod
     def start(update: Update, context: CallbackContext):
-        text = 'Регистрация персонала. (В разработке)'
+        text = f'Введите токен для регистрации в качестве патронажа'
 
-        # buttons = [
-        #     [InlineKeyboardButton(text='Назад', callback_data=f'{END}')]
-        # ]
-        # keyboard = InlineKeyboardMarkup(buttons)
-
-        if context.user_data.get(REGISTRATION_OVER):
+        if context.user_data.get(START_OVER):
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text)
         else:
-            context.bot.delete_message(update.message.chat_id,
-                                       context.chat_data['st_msg'])
-            update.message.reply_text(text=text)
+            msg = update.message.reply_text(text=text)
+            context.chat_data['st_msg'] = msg.message_id
+        context.user_data[START_OVER] = False
+        return TYPING_TOKEN
 
-        context.user_data[REGISTRATION_OVER] = False
-        return CC1_REGISTRATION_ACTION
+    @staticmethod
+    def get_token(update: Update, context: CallbackContext):
+        token = update.message.text
+        if token == get_from_env('PATRONAGE_TOKEN'):
+            update.message.reply_text('Вы успешно зарегестрированы')
+            return PatronageRegistrationDialog.default_job(update, context)
+        else:
+            update.message.reply_text('Неверный токен')
+            return TYPING_TOKEN
+
+    @staticmethod
+    def default_job(update: Update, context: CallbackContext):
+        text = "Для использовния базовго функционала нажмите на" \
+               " одну из нужных кнопок:"
+        buttons = [[InlineKeyboardButton(text='Получить данные по chat_id',
+                                         callback_data=DEFAULT_JOB),
+                   InlineKeyboardButton(
+                       text='Получить данные по всем пользователям',
+                       callback_data=DEFAULT_JOB)],
+                   [InlineKeyboardButton(text='Получить список пациентов',
+                                         callback_data=DEFAULT_JOB)]]
+        keyboard = InlineKeyboardMarkup(buttons)
+
+        if context.user_data.get(CONF_TZ_OVER):
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(text=text,
+                                                    reply_markup=keyboard)
+        else:
+            update.message.reply_text(text=text, reply_markup=keyboard)
+
+        context.user_data[CONF_TZ_OVER] = False
+        return PATRONAGE_JOB
