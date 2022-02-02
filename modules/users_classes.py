@@ -24,19 +24,20 @@ class BasicUser:
 
 
 class Patient(BasicUser):
+    # Ограничители времени
+    time_limiters = {
+        'MOR': [dt.datetime(1212, 12, 12, 6, 00, 0, tzinfo=pytz.utc),
+                dt.datetime(1212, 12, 12, 12, 00, 0, tzinfo=pytz.utc)],
+        'EVE': [dt.datetime(1212, 12, 12, 17, 00, 0, tzinfo=pytz.utc),
+                dt.datetime(1212, 12, 12, 21, 00, 0, tzinfo=pytz.utc)]
+    }
+
     def __init__(self):
         super().__init__()
         self._code = self._location = None
         self._times = {
             'MOR': dt.datetime(1212, 12, 12, 8, 00, 0, tzinfo=pytz.utc),
             'EVE': dt.datetime(1212, 12, 12, 20, 00, 0, tzinfo=pytz.utc)
-        }
-        # Ограничители времени
-        self._time_limiters = {
-            'MOR': [dt.datetime(1212, 12, 12, 6, 00, 0, tzinfo=pytz.utc),
-                    dt.datetime(1212, 12, 12, 12, 00, 0, tzinfo=pytz.utc)],
-            'EVE': [dt.datetime(1212, 12, 12, 17, 00, 0, tzinfo=pytz.utc),
-                    dt.datetime(1212, 12, 12, 21, 00, 0, tzinfo=pytz.utc)]
         }
 
     @property
@@ -64,8 +65,8 @@ class Patient(BasicUser):
         # Добавление минут
         delta = dt.timedelta(minutes=int(minutes))
         self._times[time] += delta
-        if not (self._time_limiters[time][0] <= self._times[time]
-                <= self._time_limiters[time][1]):
+        if not (self.time_limiters[time][0] <= self._times[time]
+                <= self.time_limiters[time][1]):
             self._times[time] -= delta
             return False
         return True
@@ -85,8 +86,7 @@ class Patient(BasicUser):
         self._times = {k: time_zone.normalize(self._times[k])
                        for k in self._times.keys()}
         context.user_data['user'] = UserNotifications(
-            context, update.effective_chat.id, self._times,
-            self._time_limiters, time_zone)
+            context, update.effective_chat.id, self._times, time_zone)
 
         print(time_zone)
         # TODO
@@ -97,14 +97,14 @@ class Patient(BasicUser):
 
 
 class UserNotifications(BasicUser):
-    def __init__(self, context: CallbackContext, chat_id, times, limiters, tz):
+    def __init__(self, context: CallbackContext, chat_id, times, tz):
         super().__init__()
         self.chat_id = chat_id
         self.times = times
-        self.time_limiters = limiters
+        self.time_limiters = Patient.time_limiters
         self.tz = tz
 
-        self.msg = None
+        self.msg_to_del = self.active_dialog_msg = None
         self.rep_task_name = None
 
         self.notification_states = {
@@ -113,32 +113,41 @@ class UserNotifications(BasicUser):
         }
         self.curr_state = []  # [name, index]
 
+        self.pill_response = None
+        self.data_response = {'sys': None, 'dias': None, 'heart': None}
+
         self.create_notification(context)
 
     def create_notification(self, context: CallbackContext):
-        for name, datetime in list(self.times.items())[:1]:
+        for name, notification_time in list(self.times.items())[:1]:
             create_daily_notification(
                 context=context,
                 user=self,
-                time=datetime.time(),
+                time=notification_time.time(),
                 name=name,
                 task_data={
                     'interval': dt.timedelta(hours=1) if name == 'MOR'
                     else dt.timedelta(minutes=30),
                     'last': self.tz.normalize(
-                        self.time_limiters[name][1]).time(),
-
-                },
+                        self.time_limiters[name][1]).time()},
             )
 
     def state(self):
+        """Возвращает имя временного таймера и состояние
+        (т.е. в каком диалоге находится пользователь)"""
         return self.curr_state
 
     def set_curr_state(self, name):
+        """Устанавливает новое состояние"""
         self.curr_state = [name, 0]
 
     def next_curr_state_index(self):
+        """Переключает индекс текущего состояния"""
         self.curr_state[1] += 1
+
+    def clear_responses(self):
+        self.pill_response = None
+        self.data_response = {'sys': None, 'dias': None, 'heart': None}
 
 
 class Patronage(BasicUser):

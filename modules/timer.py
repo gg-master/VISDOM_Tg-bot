@@ -39,23 +39,23 @@ def create_daily_notification(context: CallbackContext, **kwargs):
 
 def daily_task(context: CallbackContext):
     """Таски, которые выполняются ежедневно утром и вечером"""
-    from modules.notification_dailogs import PillTakingDialog, \
-        DataCollectionDialog
-
     job = context.job
     data = job.context
 
-    time_name = data['name']
+    # Устанавливаем пользователю состояние диалога
+    data['user'].set_curr_state(data['name'])
 
-    data['user'].set_curr_state(time_name)
+    # Стираем старые ответы пользователя
+    data['user'].clear_responses()
 
     # Создание диалога для сбора данных
-    if time_name == 'MOR':
-        PillTakingDialog.pre_start(context, data)
-    else:
-        DataCollectionDialog.pre_start(context, data)
+    data['user'].notification_states[data['name']][
+        data['user'].state()[1]].pre_start(context, data)
 
-    rep_task_name = f'{data["user"].chat_id}-{data["user"].msg.message_id}'
+    data['user'].rep_task_name = f'{data["user"].chat_id}' \
+                                 f'-{data["user"].msg_to_del.message_id}'
+
+    # Создаем новую циклическую задачу
     context.job_queue.run_repeating(
         callback=repeating_task,
         interval=20,
@@ -64,20 +64,19 @@ def daily_task(context: CallbackContext):
         # last=data['task_data']['last'],
         #
         context=data,
-        name=rep_task_name
+        name=data['user'].rep_task_name
     )
-    data['user'].rep_task_name = rep_task_name
 
 
 def repeating_task(context: CallbackContext):
     job = context.job
     data = job.context
-    time_name = data['name']
 
     # Удаляем старое сообщение
     context.bot.delete_message(data['user'].chat_id,
-                               data['user'].msg.message_id)
+                               data['user'].msg_to_del.message_id)
 
-    data['user'].notification_states[time_name][
+    # Запускаем новое уведомление
+    data['user'].notification_states[data['name']][
         data['user'].state()[1]].pre_start(context, data)
 
