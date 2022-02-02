@@ -1,7 +1,8 @@
 import pytz
 import datetime as dt
 
-from telegram.ext import CallbackContext
+from telegram.ext import CallbackContext, ConversationHandler, \
+    DispatcherHandlerStop
 
 
 def remove_job_if_exists(name, context: CallbackContext):
@@ -51,7 +52,6 @@ def daily_task(context: CallbackContext):
     user.clear_responses()
 
     # Если пользователь не ответил на предыдущее сообщение, то удаляем его
-    print(user.msg_to_del)
     if user.msg_to_del:
         context.bot.delete_message(user.chat_id,
                                    user.msg_to_del.message_id)
@@ -86,4 +86,3 @@ def repeating_task(context: CallbackContext):
     # Запускаем новое уведомление
     data['user'].notification_states[data['name']][
         data['user'].state()[1]].pre_start(context, data)
-

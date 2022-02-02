@@ -103,11 +103,11 @@ class UserNotifications(BasicUser):
         self.tz = pytz.timezone(tz_str)
 
         # Локализуем время уведомлений по часовому поясу пользователя
-        # self.times = {k: self.tz.localize(times[k]) for k in times.keys()}
-        self.times = {
-            'MOR': dt.time(20, 24, 0, tzinfo=pytz.timezone('Etc/GMT-3')),
-            'EVE': dt.time(20, 28, 0, tzinfo=pytz.timezone('Etc/GMT-3'))
-        }
+        self.times = {k: self.tz.localize(times[k]) for k in times.keys()}
+        # self.times = {
+        #     'MOR': dt.time(0, 48, 0, tzinfo=pytz.timezone('Etc/GMT-3')),
+        #     'EVE': dt.time(0, 49, 0, tzinfo=pytz.timezone('Etc/GMT-3'))
+        # }
         # Ограничители для времени уведомлений
         self.time_limiters = Patient.time_limiters
 
