@@ -24,7 +24,7 @@ def create_daily_notification(context: CallbackContext, **kwargs):
         # Удаляем старую задачу с таким же именем
         remove_job_if_exists(f'{chat_id} - {kwargs["name"]}', context)
 
-        job = context.job_queue.run_daily(
+        context.job_queue.run_daily(
             callback=daily_task,
             # when=5,
             time=kwargs['time'],
@@ -41,19 +41,27 @@ def daily_task(context: CallbackContext):
     """Таски, которые выполняются ежедневно утром и вечером"""
     job = context.job
     data = job.context
+    # Объект пользователя
+    user = data['user']
 
     # Устанавливаем пользователю состояние диалога
-    data['user'].set_curr_state(data['name'])
+    user.set_curr_state(data['name'])
 
     # Стираем старые ответы пользователя
-    data['user'].clear_responses()
+    user.clear_responses()
+
+    # Если пользователь не ответил на предыдущее сообщение, то удаляем его
+    print(user.msg_to_del)
+    if user.msg_to_del:
+        context.bot.delete_message(user.chat_id,
+                                   user.msg_to_del.message_id)
+        remove_job_if_exists(user.rep_task_name, context)
 
     # Создание диалога для сбора данных
-    data['user'].notification_states[data['name']][
-        data['user'].state()[1]].pre_start(context, data)
+    user.notification_states[data['name']][
+        user.state()[1]].pre_start(context, data)
 
-    data['user'].rep_task_name = f'{data["user"].chat_id}' \
-                                 f'-{data["user"].msg_to_del.message_id}'
+    user.rep_task_name = f'{user.chat_id}-{user.msg_to_del.message_id}'
 
     # Создаем новую циклическую задачу
     context.job_queue.run_repeating(
@@ -63,7 +71,7 @@ def daily_task(context: CallbackContext):
         interval=data['task_data']['interval'],
         last=data['task_data']['last'],
         context=data,
-        name=data['user'].rep_task_name
+        name=user.rep_task_name
     )
 
 

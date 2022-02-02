@@ -247,7 +247,7 @@ class ConfigureTZDialog(ConversationHandler):
 
     @staticmethod
     def conf_tz(update: Update, context: CallbackContext):
-        text = 'Введите Ваш чаоовой пояс в следующем формате: +3 или -3'
+        text = 'Введите Ваш часовой пояс в следующем формате: +3 или -3'
         update.callback_query.answer()
         update.callback_query.edit_message_text(text=text)
         return TYPING_TZ

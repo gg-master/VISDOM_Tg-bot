@@ -278,7 +278,9 @@ class DataCollectionDialog(ConversationHandler):
 
         update.callback_query.answer()
         update.callback_query.edit_message_text(text=text)
+
         remove_job_if_exists(context.user_data['user'].rep_task_name, context)
+        context.user_data['user'].mst_to_del = None
         return END
 
     @staticmethod
