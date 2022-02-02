@@ -1,6 +1,6 @@
-import datetime as dt
 import pytz
-
+import datetime as dt
+import logging
 from threading import Thread
 
 from telegram import Update
@@ -26,18 +26,18 @@ class BasicUser:
 class Patient(BasicUser):
     # Ограничители времени
     time_limiters = {
-        'MOR': [dt.datetime(1212, 12, 12, 6, 00, 0, tzinfo=pytz.utc),
-                dt.datetime(1212, 12, 12, 12, 00, 0, tzinfo=pytz.utc)],
-        'EVE': [dt.datetime(1212, 12, 12, 17, 00, 0, tzinfo=pytz.utc),
-                dt.datetime(1212, 12, 12, 21, 00, 0, tzinfo=pytz.utc)]
+        'MOR': [dt.datetime(1212, 12, 12, 6, 00, 0),
+                dt.datetime(1212, 12, 12, 12, 00, 0)],
+        'EVE': [dt.datetime(1212, 12, 12, 17, 00, 0),
+                dt.datetime(1212, 12, 12, 21, 00, 0)]
     }
 
     def __init__(self):
         super().__init__()
         self._code = self._location = None
         self._times = {
-            'MOR': dt.datetime(1212, 12, 12, 8, 00, 0, tzinfo=pytz.utc),
-            'EVE': dt.datetime(1212, 12, 12, 20, 00, 0, tzinfo=pytz.utc)
+            'MOR': dt.datetime(1212, 12, 12, 8, 00, 0),
+            'EVE': dt.datetime(1212, 12, 12, 20, 00, 0)
         }
 
     @property
@@ -71,8 +71,10 @@ class Patient(BasicUser):
             return False
         return True
 
-    def register(self, update, context):
+    def register(self, update: Update, context: CallbackContext):
         super().register()
+        logging.info(f'REGISTER new user: {update.effective_user.id}'
+                     f'-{self._code}')
         thread = Thread(target=self._threading_reg, args=(update, context))
         thread.start()
         thread.join()
@@ -83,27 +85,29 @@ class Patient(BasicUser):
                        self._location.time_zone()))
 
         # Нормализируем UTC по часовому поясу пользователя
-        self._times = {k: time_zone.normalize(self._times[k])
+        self._times = {k: time_zone.localize(self._times[k])
                        for k in self._times.keys()}
         context.user_data['user'] = UserNotifications(
             context, update.effective_chat.id, self._times, time_zone)
-
         print(time_zone)
         # TODO
         # Регистрация в БД
-        # Создание таймера
-
-        print(self.times)
 
 
 class UserNotifications(BasicUser):
     def __init__(self, context: CallbackContext, chat_id, times, tz):
         super().__init__()
         self.chat_id = chat_id
+        # Время уведомлений.
         self.times = times
+        # Ограничители для времени уведомлений
         self.time_limiters = Patient.time_limiters
+        # Часовой пояс в строков представлении. Например "Europe\Moscow"
         self.tz = tz
 
+        # Сообщения, которые отправляются пользователю при получении
+        # уведомлений. Сохраняем их для функции удаления старых сообщений
+        # при обновлении уведомления.
         self.msg_to_del = self.active_dialog_msg = None
         self.rep_task_name = None
 
@@ -113,22 +117,23 @@ class UserNotifications(BasicUser):
         }
         self.curr_state = []  # [name, index]
 
+        # Ответы от пользователя на уведомления
         self.pill_response = None
         self.data_response = {'sys': None, 'dias': None, 'heart': None}
 
         self.create_notification(context)
 
     def create_notification(self, context: CallbackContext):
-        for name, notification_time in list(self.times.items())[:1]:
+        for name, notification_time in list(self.times.items())[:2]:
             create_daily_notification(
                 context=context,
-                user=self,
-                time=notification_time.time(),
+                time=notification_time,
                 name=name,
+                user=self,
                 task_data={
                     'interval': dt.timedelta(hours=1) if name == 'MOR'
                     else dt.timedelta(minutes=30),
-                    'last': self.tz.normalize(
+                    'last': self.tz.localize(
                         self.time_limiters[name][1]).time()},
             )
 

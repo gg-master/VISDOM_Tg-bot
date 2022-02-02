@@ -366,8 +366,8 @@ class ConfigureNotifTimeDialog(ConversationHandler):
         res = context.user_data["user"].add_minutes(tm, update.callback_query.data)
 
         text = f'Изменение времени получения ' \
-               f'{"вечерних" if context.user_data["tm"] == "EVE" else "утренних"}  ' \
-               f'уведомлений.\n'
+               f'{"вечерних" if context.user_data["tm"] == "EVE" else "утренних"}' \
+               f' уведомлений.\n'
 
         if not res and context.user_data.get('lim'):
             return TIME_CHANGE

@@ -24,10 +24,10 @@ def create_daily_notification(context: CallbackContext, **kwargs):
         # Удаляем старую задачу с таким же именем
         remove_job_if_exists(f'{chat_id} - {kwargs["name"]}', context)
 
-        context.job_queue.run_once(
+        job = context.job_queue.run_daily(
             callback=daily_task,
-            when=5,
-            # time=kwargs['time'],
+            # when=5,
+            time=kwargs['time'],
             context=kwargs,
             name=f'{chat_id}-{kwargs["name"]}'
         )
@@ -58,11 +58,10 @@ def daily_task(context: CallbackContext):
     # Создаем новую циклическую задачу
     context.job_queue.run_repeating(
         callback=repeating_task,
-        interval=20,
-        last=dt.datetime.now(pytz.utc) + dt.timedelta(seconds=20*4),
-        # interval=data['task_data']['interval'],
-        # last=data['task_data']['last'],
-        #
+        # interval=20,
+        # last=dt.datetime.now(pytz.utc) + dt.timedelta(seconds=20*4),
+        interval=data['task_data']['interval'],
+        last=data['task_data']['last'],
         context=data,
         name=data['user'].rep_task_name
     )

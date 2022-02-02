@@ -26,16 +26,21 @@ def convert_tz(coords=None, tz_offset=None) -> str:
     from tzwhere import tzwhere
     from datetime import datetime, timedelta
 
+    now = datetime.now(pytz.utc)
     if coords and not tz_offset:
         tz = tzwhere.tzwhere(forceTZ=True)
-        timezone_str = tz.tzNameAt(*coords, forceTZ=True)
-        return timezone_str
-    else:
-        utc_offset = timedelta(hours=int(tz_offset))
-        now = datetime.now(pytz.utc)
+        timezone = pytz.timezone(tz.tzNameAt(*coords, forceTZ=True))
         all_tz = list(
             {tz.zone for tz in map(pytz.timezone, pytz.all_timezones_set)
-             if now.astimezone(tz).utcoffset() == utc_offset})
+             if now.astimezone(tz).utcoffset() == now.astimezone(
+                timezone).utcoffset() and tz.zone.startswith('Etc/')})
+        return all_tz[0]
+    else:
+        utc_offset = timedelta(hours=int(tz_offset))
+        all_tz = list(
+            {tz.zone for tz in map(pytz.timezone, pytz.all_timezones_set)
+             if now.astimezone(tz).utcoffset() == utc_offset
+             and tz.zone.startswith('Etc/')})
         return all_tz[0]
 
 

@@ -1,6 +1,4 @@
-# Импортируем необходимые классы.
 import logging
-import datetime as dt
 
 from telegram import Update
 from telegram.ext import Updater, MessageHandler, Filters, Defaults
