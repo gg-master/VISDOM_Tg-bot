@@ -5,7 +5,7 @@ from telegram.ext import (
     Filters, CallbackQueryHandler,
 )
 
-from modules.users_classes import User, Patient
+from modules.users_classes import BasicUser, Patient
 from tools.prepared_answers import START_MSG
 from modules.dialogs_shortcuts.start_shortcuts import *
 from tools.decorators import not_registered_users
@@ -27,7 +27,7 @@ class StartDialog(ConversationHandler):
     @not_registered_users
     def start(update: Update, context: CallbackContext):
         if not context.user_data.get('user'):
-            context.user_data['user'] = User()
+            context.user_data['user'] = BasicUser()
 
         buttons = [
             [InlineKeyboardButton(text='Зарегистрироваться',
@@ -100,7 +100,7 @@ class PatientRegistrationDialog(ConversationHandler):
 
     @staticmethod
     def start(update: Update, context: CallbackContext):
-        if type(context.user_data['user']) is User:
+        if type(context.user_data['user']) is BasicUser:
             context.user_data['user'] = Patient()
 
         location = context.user_data['user'].location
@@ -130,7 +130,7 @@ class PatientRegistrationDialog(ConversationHandler):
              InlineKeyboardButton(text='Добавить часовой пояс' if not location
              else 'Изменить часовой пояс', callback_data=f'{CONF_TZ}')],
 
-            [InlineKeyboardButton(text='Назад', callback_data=f'{END}')]
+            # [InlineKeyboardButton(text='Назад', callback_data=f'{END}')]
         ]
         keyboard = InlineKeyboardMarkup(buttons)
 
@@ -248,7 +248,7 @@ class ConfigureTZDialog(ConversationHandler):
 
     @staticmethod
     def conf_tz(update: Update, context: CallbackContext):
-        text = 'Введите Ваш чаоовой пояс в следующем формате: +3 или -3'
+        text = 'Введите Ваш часовой пояс в следующем формате: +3 или -3'
         update.callback_query.answer()
         update.callback_query.edit_message_text(text=text)
         return TYPING_TZ
@@ -364,11 +364,21 @@ class ConfigureNotifTimeDialog(ConversationHandler):
     @staticmethod
     def time_change(update: Update, context: CallbackContext):
         tm = context.user_data['tm']
-        context.user_data["user"].add_minutes(tm, update.callback_query.data)
+        res = context.user_data["user"].add_minutes(tm, update.callback_query.data)
 
         text = f'Изменение времени получения ' \
-               f'{"вечерних" if context.user_data["tm"] == "EVE" else "утренних"}  ' \
-               f'уведомлений.\nВремя: {context.user_data["user"].times[tm]}'
+               f'{"вечерних" if context.user_data["tm"] == "EVE" else "утренних"}' \
+               f' уведомлений.\n'
+
+        if not res and context.user_data.get('lim'):
+            return TIME_CHANGE
+
+        if not res:
+            text += f'Крайне время: {context.user_data["user"].times[tm]}'
+            context.user_data['lim'] = True
+        else:
+            text += f'Время: {context.user_data["user"].times[tm]}'
+            context.user_data['lim'] = False
 
         keyboard = InlineKeyboardMarkup(ConfigureNotifTimeDialog.buttons)
 
@@ -423,6 +433,8 @@ class PatronageRegistrationDialog(ConversationHandler):
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text)
         else:
+            context.bot.delete_message(update.message.chat_id,
+                                       context.chat_data['st_msg'])
             msg = update.message.reply_text(text=text)
             context.chat_data['st_msg'] = msg.message_id
         context.user_data[START_OVER] = False

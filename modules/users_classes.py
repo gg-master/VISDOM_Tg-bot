@@ -1,13 +1,19 @@
+import pytz
 import datetime as dt
-
+import logging
 from threading import Thread
+from typing import Dict
+
+from telegram import Update
+from telegram.ext import CallbackContext
 
 from modules.location import Location
-from modules.smart_timer import set_timer
+from modules.notification_dailogs import PillTakingDialog, DataCollectionDialog
+from modules.timer import create_daily_notification
 from tools.tools import convert_tz
 
 
-class User:
+class BasicUser:
     def __init__(self):
         self.is_registered = False
 
@@ -18,7 +24,15 @@ class User:
         self.is_registered = True
 
 
-class Patient(User):
+class Patient(BasicUser):
+    # Ограничители времени
+    time_limiters = {
+        'MOR': [dt.datetime(1212, 12, 12, 6, 00, 0),
+                dt.datetime(1212, 12, 12, 12, 00, 0)],
+        'EVE': [dt.datetime(1212, 12, 12, 17, 00, 0),
+                dt.datetime(1212, 12, 12, 21, 00, 0)]
+    }
+
     def __init__(self):
         super().__init__()
         self._code = self._location = None
@@ -50,25 +64,102 @@ class Patient(User):
 
     def add_minutes(self, time, minutes):
         # Добавление минут
-        self._times[time] += dt.timedelta(minutes=int(minutes))
+        delta = dt.timedelta(minutes=int(minutes))
+        self._times[time] += delta
+        # Ограничение времени
+        if not (self.time_limiters[time][0] <= self._times[time]
+                <= self.time_limiters[time][1]):
+            self._times[time] -= delta
+            return False
+        return True
 
-    def register(self, update, context):
+    def register(self, update: Update, context: CallbackContext):
         super().register()
+        logging.info(f'REGISTER NEW USER: {update.effective_user.id}'
+                     f' - {self._code}')
         thread = Thread(target=self._threading_reg, args=(update, context))
         thread.start()
         thread.join()
 
-    def _threading_reg(self, update, context):
-        time_zone = convert_tz(self._location.get_coords(),
-                               self._location.time_zone())
-        print(time_zone)
+    def _threading_reg(self, update: Update, context: CallbackContext):
+        tz_str = convert_tz(self._location.get_coords(),
+                            self._location.time_zone())
+        # Конвертирование из datetime в time
+        self._times = {k: self._times[k].time() for k in self._times.keys()}
+
+        context.user_data['user'] = UserNotifications(
+            context, update.effective_chat.id, self._times, tz_str)
         # TODO
         # Регистрация в БД
-        # Создание таймера
-        #
-        # set_timer(update, context, 10)
-        print(self.times)
 
 
-class Specialist(User):
+class UserNotifications(BasicUser):
+    def __init__(self, context: CallbackContext, chat_id: int,
+                 times: Dict[str, dt.time], tz_str: str):
+        super().__init__()
+        # Id чата с пользователем
+        self.chat_id = chat_id
+        # Конвертирование часового пояса из строки в объект
+        self.tz = pytz.timezone(tz_str)
+
+        # Локализуем время уведомлений по часовому поясу пользователя
+        # self.times = {k: self.tz.localize(times[k]) for k in times.keys()}
+        self.times = {
+            'MOR': dt.time(20, 24, 0, tzinfo=pytz.timezone('Etc/GMT-3')),
+            'EVE': dt.time(20, 28, 0, tzinfo=pytz.timezone('Etc/GMT-3'))
+        }
+        # Ограничители для времени уведомлений
+        self.time_limiters = Patient.time_limiters
+
+        # Сообщения, которые отправляются пользователю при получении
+        # уведомлений. Сохраняем их для функции удаления старых сообщений
+        # при обновлении уведомления.
+        self.msg_to_del = self.active_dialog_msg = None
+        self.rep_task_name = None
+
+        self.notification_states = {
+            'MOR': [PillTakingDialog, DataCollectionDialog],
+            'EVE': [DataCollectionDialog]
+        }
+        self.curr_state = []  # [name, index]
+
+        # Ответы от пользователя на уведомления
+        self.pill_response = None
+        self.data_response = {'sys': None, 'dias': None, 'heart': None}
+
+        self.create_notification(context)
+
+    def create_notification(self, context: CallbackContext):
+        for name, notification_time in list(self.times.items())[:]:
+            create_daily_notification(
+                context=context,
+                time=notification_time,
+                name=name,
+                user=self,
+                task_data={
+                    'interval': dt.timedelta(hours=1) if name == 'MOR'
+                    else dt.timedelta(minutes=30),
+                    'last': self.tz.localize(
+                        self.time_limiters[name][1]).time()},
+            )
+
+    def state(self):
+        """Возвращает имя временного таймера и состояние
+        (т.е. в каком диалоге находится пользователь)"""
+        return self.curr_state
+
+    def set_curr_state(self, name):
+        """Устанавливает новое состояние"""
+        self.curr_state = [name, 0]
+
+    def next_curr_state_index(self):
+        """Переключает индекс текущего состояния"""
+        self.curr_state[1] += 1
+
+    def clear_responses(self):
+        self.pill_response = None
+        self.data_response = {'sys': None, 'dias': None, 'heart': None}
+
+
+class Patronage(BasicUser):
     pass

@@ -130,6 +130,13 @@ class FindLocationDialog(ConversationHandler):
 
     @staticmethod
     def location_response(update: Update, context: CallbackContext):
+        """
+        Проверка результата поиска через апи.
+        Сохранение позиции, полученной через геометку ТГ.
+        :param update:
+        :param context:
+        :return:
+        """
         from modules.start_dialogs import PatientRegistrationDialog
         response = update.message.text
         location = update.message.location
@@ -151,6 +158,7 @@ class FindLocationDialog(ConversationHandler):
 
     @staticmethod
     def back_to_prev_level(update: Update, context: CallbackContext):
+        # Переход на предыдущий уровень в диалоге
         if not context.user_data['user'].registered():
             from modules.start_dialogs import ConfigureTZDialog
             context.user_data[CONF_TZ_OVER] = True
@@ -159,7 +167,14 @@ class FindLocationDialog(ConversationHandler):
 
     @staticmethod
     def find_location(update: Update, context: CallbackContext):
-        # Поиск локации в яндексе.
+        """
+        Поиск локации в яндексе
+        :param update:
+        :param context:
+        :return: yandex static api request
+        """
+
+        # Получние ответа от геокодера о поиске адреса
         geocoder_uri = "http://geocode-maps.yandex.ru/1.x/"
         response = requests.get(geocoder_uri, params={
             "apikey": get_from_env('GEOCODER_T'),
@@ -174,6 +189,7 @@ class FindLocationDialog(ConversationHandler):
 
         json_response = response.json()
 
+        # На основе ответа геокодера получаем координаты объекта
         if json_response['response']['GeoObjectCollection'][
             'metaDataProperty']['GeocoderResponseMetaData']['found'] == '0':
             update.message.reply_text('Мы не смогли найти указанный адрес. '
@@ -190,11 +206,13 @@ class FindLocationDialog(ConversationHandler):
         ll = ",".join([toponym_longitude, toponym_lattitude])
         spn = ",".join([delta, delta])
 
+        # Ищем объект на карте, чтобы определить что правильно нашли место
         static_api_request = \
             f"http://static-maps.yandex.ru/1.x/?ll={ll}" \
             f"&spn={spn}&l=map&" \
             f"pt={','.join([toponym_longitude, toponym_lattitude])},vkbkm"
 
+        # Запоминаем положение
         context.user_data['user'].location = \
             Location(location={update.message.text: [toponym_longitude,
                                                      toponym_lattitude]})

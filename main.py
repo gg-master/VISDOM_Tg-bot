@@ -1,14 +1,14 @@
-# Импортируем необходимые классы.
 import logging
-import datetime as dt
 
+from telegram import Update
 from telegram.ext import Updater, MessageHandler, Filters, Defaults
 from telegram.ext import CommandHandler
 
 from modules.restore import Restore
 from tools.prepared_answers import *
 from modules.start_dialogs import StartDialog
-from modules.smart_timer import *
+from modules.notification_dailogs import PillTakingDialog, DataCollectionDialog
+from modules.timer import *
 from tools.tools import get_from_env
 
 logging.basicConfig(level=logging.INFO,
@@ -34,16 +34,19 @@ def echo(update: Update, context: CallbackContext):
 
 
 def main():
+    # chat_id = 721698752
     updater = Updater(get_from_env('TOKEN'),
                       use_context=True, defaults=Defaults(run_async=True))
 
     dp = updater.dispatcher
 
-    # Восстановление уведомлений после перезапуска бота для зарегистрированных
-    # пользователей
+    # Восстановление уведомлений после перезапуска бота
     Restore(dp)
 
     dp.add_handler(StartDialog())
+
+    dp.add_handler(PillTakingDialog())
+    dp.add_handler(DataCollectionDialog())
 
     # dp.add_handler(CommandHandler("set", set_timer,
     #     #                               pass_args=True,
