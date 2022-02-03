@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ConversationHandler, CallbackQueryHandler, \
-    CallbackContext, CommandHandler, MessageHandler, Filters
+    CallbackContext, CommandHandler, MessageHandler, Filters, \
+    DispatcherHandlerStop
 
 from modules.timer import remove_job_if_exists
 
@@ -27,7 +28,7 @@ class PillTakingDialog(ConversationHandler):
                 ]
             },
             fallbacks=[CommandHandler('stop', self.stop),
-                       CallbackQueryHandler(self.stop,
+                       CallbackQueryHandler(self.start,
                                             pattern=f'^{PILL_TAKING}$')
                        ]
         )
@@ -60,8 +61,8 @@ class PillTakingDialog(ConversationHandler):
         if not response:
             text = 'Доброе утро! Примите, пожалуйста, лекарство!\n\n' \
                    'Если вы приняли лекарство, нажмите "Я принял лекарство".' \
-                   '\n\nЕсли у Вас нет возможности принять лекарство, нажмите ' \
-                   '"Я не могу принять" и опишите свою причину.'
+                   '\n\nЕсли у Вас нет возможности принять лекарство, ' \
+                   'нажмите "Я не могу принять" и опишите свою причину.'
         else:
             text = f'Нажмите "Подтвердить", чтобы сохранить ваш ответ.\n' \
                    f'При необходимости Вы можете изменить ваш ответ.' \
@@ -85,13 +86,17 @@ class PillTakingDialog(ConversationHandler):
                 text=text, reply_markup=keyboard)
         else:
             # Если сообщения отличаются
-            # (т.е. сообщение обновилось, то активируем диалогове соощение)
-            if user.active_dialog_msg and \
-                    user.msg_to_del != user.active_dialog_msg:
-                context.bot.delete_message(
-                    update.effective_chat.id, user.msg_to_del.message_id)
+            # (т.е. сообщение обновилось, то завершаем диалог)
+            if user.is_msg_updated():
+                user.active_dialog_msg = None
+                return END
 
-            msg = update.message.reply_text(text=text, reply_markup=keyboard)
+            # Удаляем pre-start сообщение перед началом диалога
+            context.bot.delete_message(user.chat_id, user.msg_to_del.message_id)
+
+            # Отправляем новое сообщение
+            msg = context.bot.send_message(
+                user.chat_id, text=text, reply_markup=keyboard)
 
         user.msg_to_del = user.active_dialog_msg = msg
 
@@ -139,19 +144,13 @@ class PillTakingDialog(ConversationHandler):
 
     @staticmethod
     def stop(update: Update, context: CallbackContext):
-        """Перезапуск диалога после его остановки."""
-
-        # Если пользователь заново начал диалог через кнопку, то перезапускаем.
-        if update.callback_query and \
-                update.callback_query.data == f'{PILL_TAKING}':
-            return PillTakingDialog.start(update, context)
-
-        # Если пользователь ввел команду /stop, диалог останавливается.
-        context.bot.delete_message(update.effective_chat.id,
-                                   context.user_data[
-                                       'user'].msg_to_del.message_id)
-        PillTakingDialog.pre_start(
-            context, data={'user': context.user_data['user']})
+        user = context.user_data['user']
+        # Если сообщение еще не обновилось
+        if not user.is_msg_updated():
+            # Если пользователь ввел команду /stop, диалог останавливается.
+            context.bot.delete_message(update.effective_chat.id,
+                                       user.msg_to_del.message_id)
+            PillTakingDialog.pre_start(context, data={'user': user})
         return END
 
 
@@ -233,11 +232,16 @@ class DataCollectionDialog(ConversationHandler):
             msg = update.callback_query.edit_message_text(
                 text=text, reply_markup=keyboard)
         else:
-            if user.active_dialog_msg and \
-                    user.msg_to_del != user.active_dialog_msg:
-                context.bot.delete_message(
-                    update.effective_chat.id, user.msg_to_del.message_id)
-            msg = update.message.reply_text(text=text, reply_markup=keyboard)
+            # Если сообщения отличаются
+            # (т.е. сообщение обновилось, то завершаем диалог)
+            if user.is_msg_updated():
+                user.active_dialog_msg = None
+                return END
+            # Удаляем pre-start сообщение перед началом диалога
+            context.bot.delete_message(user.chat_id, user.msg_to_del.message_id)
+            # Отправляем новое сообщение
+            msg = context.bot.send_message(
+                user.chat_id, text=text, reply_markup=keyboard)
 
         user.msg_to_del = user.active_dialog_msg = msg
 
@@ -280,22 +284,17 @@ class DataCollectionDialog(ConversationHandler):
         update.callback_query.edit_message_text(text=text)
 
         remove_job_if_exists(context.user_data['user'].rep_task_name, context)
-        context.user_data['user'].mst_to_del = None
+        context.user_data['user'].msg_to_del = None
         return END
 
     @staticmethod
     def stop(update: Update, context: CallbackContext):
-        """Перезапуск диалога после его остановки.
-        См. PillTakingDialog.stop
-        """
-        if update.callback_query and \
-                update.callback_query.data == f'{DATA_COLLECT}':
-            return DataCollectionDialog.start(update, context)
+        user = context.user_data['user']
+        # Если сообщение еще не обновилось
+        if not user.is_msg_updated():
+            context.bot.delete_message(update.effective_chat.id,
+                                       user.msg_to_del.message_id)
 
-        context.bot.delete_message(update.effective_chat.id,
-                                   context.user_data[
-                                       'user'].msg_to_del.message_id)
-
-        DataCollectionDialog.pre_start(
-            context, data={'user': context.user_data['user']})
+            DataCollectionDialog.pre_start(
+                context, data={'user': context.user_data['user']})
         return END
