@@ -3,9 +3,18 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, \
 from telegram.ext import ConversationHandler, MessageHandler, Filters, \
     CommandHandler, CallbackQueryHandler, CallbackContext
 
-from modules.dialogs_shortcuts.start_shortcuts import END, CONF_TZ, \
-    CONF_NOTIFICATIONS
+from modules.dialogs_shortcuts.start_shortcuts import \
+    END, CONF_TZ, CONF_NOTIFICATIONS
 from modules.start_dialogs import ConfigureTZDialog, ConfigureNotifTimeDialog
+
+(
+    # State
+    SETTINGS_ACTION,
+    # Constants
+    SETTINGS_OVER,
+    DROP_NOTIF_TIME,
+    CONFIRM
+) = map(chr, range(4))
 
 
 class SettingsDialog(ConversationHandler):
@@ -15,20 +24,22 @@ class SettingsDialog(ConversationHandler):
             entry_points=[MessageHandler(Filters.regex('^Настройки$'),
                                          self.start)],
             states={
-                'SETTINGS_ACTION': [
+                SETTINGS_ACTION: [
                     SettingsConfTZDialog(),
                     SettingsConfNotifTimeDialog(),
+                    CallbackQueryHandler(self.confirm, pattern=f'^{CONFIRM}$'),
+                    CallbackQueryHandler(self.drop_notif_time,
+                                         pattern=f'^{DROP_NOTIF_TIME}$')
                 ]
             },
             fallbacks=[
                  CallbackQueryHandler(self.stop, pattern=f'^{END}$'),
-                 CommandHandler('stop', self.stop),]
+                 CommandHandler('stop', self.stop)]
         )
 
     @staticmethod
     def start(update: Update, context: CallbackContext):
         text = 'Настройки'
-        # location = context.user_data['user'].location
 
         buttons = [
             [
@@ -39,23 +50,28 @@ class SettingsDialog(ConversationHandler):
             ],
             [
                 InlineKeyboardButton(text='Сбросить время уведомлений',
-                                     callback_data=f'1'),
+                                     callback_data=f'{DROP_NOTIF_TIME}'),
             ],
             [InlineKeyboardButton(text='Отмена', callback_data=f'{END}'),
-             InlineKeyboardButton(text='Подтвердить', callback_data='1'),
+             InlineKeyboardButton(text='Подтвердить',
+                                  callback_data=f'{CONFIRM}'),
              ]
         ]
         keyboard = InlineKeyboardMarkup(buttons)
 
-        if context.user_data.get('SETTINGS_OVER'):
+        if context.user_data.get(SETTINGS_OVER):
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text,
                                                     reply_markup=keyboard)
         else:
             update.message.reply_text(text=text, reply_markup=keyboard)
 
-        context.user_data['SETTINGS_OVER'] = False
-        return 'SETTINGS_ACTION'
+        context.user_data[SETTINGS_OVER] = False
+        return SETTINGS_ACTION
+
+    @staticmethod
+    def drop_notif_time(update: Update, context: CallbackContext):
+        pass
 
     @staticmethod
     def stop(update: Update, context: CallbackContext):
@@ -86,7 +102,7 @@ class SettingsConfNotifTimeDialog(ConfigureNotifTimeDialog):
 
     @staticmethod
     def back(update: Update, context: CallbackContext):
-        context.user_data['SETTINGS_OVER'] = True
+        context.user_data[SETTINGS_OVER] = True
         SettingsDialog.start(update, context)
         return END
 
@@ -104,6 +120,6 @@ class SettingsConfTZDialog(ConfigureTZDialog):
 
     @staticmethod
     def back(update: Update, context: CallbackContext):
-        context.user_data['SETTINGS_OVER'] = True
+        context.user_data[SETTINGS_OVER] = True
         SettingsDialog.start(update, context)
         return END

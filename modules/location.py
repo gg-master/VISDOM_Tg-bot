@@ -6,7 +6,7 @@ from telegram.ext import CallbackContext, ConversationHandler, \
 
 from tools.prepared_answers import BAD_GEOCODER_RESP
 from tools.tools import get_from_env
-
+from modules.settings_dialogs import SETTINGS_ACTION
 from modules.dialogs_shortcuts.start_shortcuts import (
     PATIENT_REGISTRATION_ACTION,
     CONF_TZ_OVER,
@@ -136,7 +136,6 @@ class FindLocationDialog(ConversationHandler):
         """
         from modules.start_dialogs import PatientRegistrationDialog
 
-
         response = update.message.text
         location = update.message.location
 
@@ -191,7 +190,7 @@ class FindLocationDialog(ConversationHandler):
 
         # На основе ответа геокодера получаем координаты объекта
         if json_response['response']['GeoObjectCollection'][
-            'metaDataProperty']['GeocoderResponseMetaData']['found'] == '0':
+             'metaDataProperty']['GeocoderResponseMetaData']['found'] == '0':
             update.message.reply_text('Мы не смогли найти указанный адрес. '
                                       'Попробуйте снова.')
             return None
@@ -224,7 +223,7 @@ class ChangeLocationDialog(FindLocationDialog):
     def __init__(self):
         super().__init__()
         self.map_to_parent.update({
-            'SETTINGS_ACTION': END
+            SETTINGS_ACTION: END
         })
 
     @staticmethod
