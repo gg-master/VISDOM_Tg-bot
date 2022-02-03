@@ -54,7 +54,13 @@ END = ConversationHandler.END
 (
     RECEIVE_TOKEN,
     TYPING_TOKEN,
-    PATRONAGE_JOB,
-    DEFAULT_JOB
-) = map(chr, range(20, 24))
+    DEFAULT_JOB,
+    SOMETHING,
+    MESSAGE_HANDLER,
+    SEND_USER_DATA_PAT,
+    PATRONAGE_ACTION,
+    ENTER_TOKEN
+) = map(chr, range(20, 28))
+
+PATRONAGE_JOB = 'PATRONAGE_JOB'
 

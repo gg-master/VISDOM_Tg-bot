@@ -12,6 +12,14 @@ from modules.notification_dailogs import PillTakingDialog, DataCollectionDialog
 from modules.timer import create_daily_notification
 from tools.tools import convert_tz
 
+from data.patronage import Patronage
+from data.patient import Patient
+
+from pandas import DataFrame
+from data import db_session
+db_session.global_init()
+db_sess = db_session.create_session()
+
 
 class BasicUser:
     def __init__(self):
@@ -24,7 +32,7 @@ class BasicUser:
         self.is_registered = True
 
 
-class Patient(BasicUser):
+class PatientUser(BasicUser):
     # Ограничители времени
     time_limiters = {
         'MOR': [dt.datetime(1212, 12, 12, 6, 00, 0),
@@ -92,6 +100,10 @@ class Patient(BasicUser):
         # TODO
         # Регистрация в БД
 
+    @staticmethod
+    def get_patient_by_id(user_code):
+        return db_sess.query(Patient).filter(Patient.user_code == user_code).first()
+
 
 class UserNotifications(BasicUser):
     def __init__(self, context: CallbackContext, chat_id: int,
@@ -109,7 +121,7 @@ class UserNotifications(BasicUser):
             'EVE': dt.time(20, 28, 0, tzinfo=pytz.timezone('Etc/GMT-3'))
         }
         # Ограничители для времени уведомлений
-        self.time_limiters = Patient.time_limiters
+        self.time_limiters = PatientUser.time_limiters
 
         # Сообщения, которые отправляются пользователю при получении
         # уведомлений. Сохраняем их для функции удаления старых сообщений
@@ -161,5 +173,56 @@ class UserNotifications(BasicUser):
         self.data_response = {'sys': None, 'dias': None, 'heart': None}
 
 
-class Patronage(BasicUser):
-    pass
+class PatronageUser(BasicUser):
+    def register(self, update: Update, context: CallbackContext):
+        super().register()
+        # logging.info(f'REGISTER NEW USER: {update.effective_user.id}'
+        #              f' - {self._code}')
+        thread = Thread(target=self._threading_reg, args=(update, context))
+        thread.start()
+        thread.join()
+
+    def _threading_reg(self, update: Update, context: CallbackContext):
+        patronage = Patronage(chat_id=update.effective_chat.id)
+        db_sess.add(patronage)
+        db_sess.commit()
+
+    @staticmethod
+    def make_file_by_patient(patient):
+        arr_sys_press, arr_dias_press, arr_heart_rate, arr_time, arr_time_zone, \
+        arr_id = [], [], [], [], [], []
+        for accept_time in patient.accept_time:
+            for record in accept_time.record:
+                arr_sys_press.append(record.sys_press)
+                arr_dias_press.append(record.dias_press)
+                arr_heart_rate.append(record.heart_rate)
+                arr_time.append(record.time)
+                arr_time_zone.append(record.time_zone)
+        df = DataFrame({'Систолическое давление': arr_sys_press,
+                        'Диастолическое давление': arr_dias_press,
+                        'Частота сердечных сокращений': arr_heart_rate,
+                        'Время приема таблеток и измерений': arr_time,
+                        'Часовой пояс': arr_time_zone})
+        df.to_excel('static/' + patient.user_code + '.xlsx')
+
+    @staticmethod
+    def make_file_patients():
+        arr_sys_press, arr_dias_press, arr_heart_rate, arr_time, arr_time_zone, \
+        patient_user_code = [], [], [], [], [], []
+        patients = db_sess.query(Patient).all()
+        for patient in patients:
+            for accept_time in patient.accept_time:
+                for record in accept_time.record:
+                    patient_user_code.append(patient.id)
+                    arr_sys_press.append(record.sys_press)
+                    arr_dias_press.append(record.dias_press)
+                    arr_heart_rate.append(record.heart_rate)
+                    arr_time.append(record.time)
+                    arr_time_zone.append(record.time_zone)
+        df = DataFrame({'Код пациента': patient_user_code,
+                        'Систолическое давление': arr_sys_press,
+                        'Диастолическое давление': arr_dias_press,
+                        'Частота сердечных сокращений': arr_heart_rate,
+                        'Время приема таблеток и измерений': arr_time,
+                        'Часовой пояс': arr_time_zone})
+        df.to_excel(f'static/statistics.xlsx')

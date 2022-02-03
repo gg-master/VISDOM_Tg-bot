@@ -1,11 +1,11 @@
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, \
-    InlineKeyboardButton, ReplyKeyboardRemove
+    KeyboardButton, InlineKeyboardButton, ReplyKeyboardRemove
 from telegram.ext import (
     CallbackContext, CommandHandler, MessageHandler,
     Filters, CallbackQueryHandler,
 )
 
-from modules.users_classes import BasicUser, Patient
+from modules.users_classes import BasicUser, PatientUser, PatronageUser
 from tools.prepared_answers import START_MSG
 from modules.dialogs_shortcuts.start_shortcuts import *
 from tools.decorators import not_registered_users
@@ -101,7 +101,7 @@ class PatientRegistrationDialog(ConversationHandler):
     @staticmethod
     def start(update: Update, context: CallbackContext):
         if type(context.user_data['user']) is BasicUser:
-            context.user_data['user'] = Patient()
+            context.user_data['user'] = PatientUser()
 
         location = context.user_data['user'].location
         code = context.user_data['user'].code
@@ -125,7 +125,7 @@ class PatientRegistrationDialog(ConversationHandler):
             if location and code else '',
 
             [InlineKeyboardButton(text='Добавить код' if not code else
-             'Изменить код', callback_data=f'{CONF_CODE}'),
+            'Изменить код', callback_data=f'{CONF_CODE}'),
 
              InlineKeyboardButton(text='Добавить часовой пояс' if not location
              else 'Изменить часовой пояс', callback_data=f'{CONF_TZ}')],
@@ -364,7 +364,8 @@ class ConfigureNotifTimeDialog(ConversationHandler):
     @staticmethod
     def time_change(update: Update, context: CallbackContext):
         tm = context.user_data['tm']
-        res = context.user_data["user"].add_minutes(tm, update.callback_query.data)
+        res = context.user_data["user"].add_minutes(tm,
+                                                    update.callback_query.data)
 
         text = f'Изменение времени получения ' \
                f'{"вечерних" if context.user_data["tm"] == "EVE" else "утренних"}' \
@@ -396,22 +397,14 @@ class ConfigureNotifTimeDialog(ConversationHandler):
 class PatronageRegistrationDialog(ConversationHandler):
     def __init__(self):
         super().__init__(
+            name=self.__class__.__name__,
             entry_points=[CallbackQueryHandler(self.start,
                                                pattern=f'^{SIGN_UP_AS_PATRONAGE}$'),
                           CommandHandler('reg_patronage', self.start)],
             states={
-                # PATRONAGE_REGISTRATION_ACTION: [
-                #     CallbackQueryHandler(self.get_token,
-                #                          pattern=f'^{RECEIVE_TOKEN}')
-                # ],
-                TYPING_TOKEN:[
+                TYPING_TOKEN: [
                     MessageHandler(Filters.text & ~Filters.command,
                                    self.get_token)
-                ],
-                PATRONAGE_JOB: [
-                    CallbackQueryHandler(self.default_job,
-                                         pattern=f'^{DEFAULT_JOB}&')
-
                 ]
             },
             fallbacks=[
@@ -444,31 +437,110 @@ class PatronageRegistrationDialog(ConversationHandler):
     def get_token(update: Update, context: CallbackContext):
         token = update.message.text
         if token == get_from_env('PATRONAGE_TOKEN'):
-            update.message.reply_text('Вы успешно зарегестрированы')
-            return PatronageRegistrationDialog.default_job(update, context)
+            # context.user_data['user'] = PatronageUser()
+            # context.user_data['user'].register(update, context)
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(
+                text='Начать работу', callback_data=DEFAULT_JOB)]])
+            context.bot.send_message(update.message.chat_id,
+                                     text='Вы успешно зарегестрированы',
+                                     reply_markup=keyboard)
+            return END
         else:
             update.message.reply_text('Неверный токен')
             return TYPING_TOKEN
+
+
+class PatronageJob(ConversationHandler):
+    def __init__(self):
+
+        super(PatronageJob, self).__init__(
+            name=self.__class__.__name__,
+            entry_points=[CallbackQueryHandler(self.default_job,
+                                               pattern=f'^{DEFAULT_JOB}$')],
+            states={PATRONAGE_JOB: [
+                CallbackQueryHandler(self.default_job,
+                                     pattern=f'^{DEFAULT_JOB}$'),
+                CallbackQueryHandler(self.send_user_file,
+                                     pattern=f'^{SEND_USER_DATA_PAT}$')
+            ],
+                MESSAGE_HANDLER: [
+                    MessageHandler(Filters.text & ~Filters.command,
+                                   self.message_handler)
+                    ],
+                SEND_USER_DATA_PAT:[
+                    MessageHandler(Filters.text & ~Filters.command,
+                                   self.send_user_data)
+                ]},
+
+            fallbacks=[
+                CommandHandler('stop', StartDialog.stop_nested,
+                               run_async=False),
+                CallbackQueryHandler(PatientRegistrationDialog.back_to_start,
+                                     pattern=f'^{END}$')
+            ],
+            map_to_parent={
+                STOPPING: END,
+            }
+        )
 
     @staticmethod
     def default_job(update: Update, context: CallbackContext):
         text = "Для использовния базовго функционала нажмите на" \
                " одну из нужных кнопок:"
-        buttons = [[InlineKeyboardButton(text='Получить данные по chat_id',
-                                         callback_data=DEFAULT_JOB),
-                   InlineKeyboardButton(
-                       text='Получить данные по всем пользователям',
-                       callback_data=DEFAULT_JOB)],
-                   [InlineKeyboardButton(text='Получить список пациентов',
-                                         callback_data=DEFAULT_JOB)]]
-        keyboard = InlineKeyboardMarkup(buttons)
+        keyboard = ReplyKeyboardMarkup(
+            [['Получить данные по пациенту',
+              'Получить данные по всем пользователям'],
+             ['Получить список пациентов']])
 
-        if context.user_data.get(CONF_TZ_OVER):
-            update.callback_query.answer()
-            update.callback_query.edit_message_text(text=text,
-                                                    reply_markup=keyboard)
-        else:
-            update.message.reply_text(text=text, reply_markup=keyboard)
+        context.bot.send_message(update.effective_chat.id, text=text,
+                                 reply_markup=keyboard)
 
         context.user_data[CONF_TZ_OVER] = False
-        return PATRONAGE_JOB
+        return MESSAGE_HANDLER
+
+    @staticmethod
+    def message_handler(update: Update, context: CallbackContext):
+        text = update.message.text
+        if text == 'Получить данные по пациенту':
+            return PatronageJob.send_user_file(update, context)
+        elif text == 'Получить данные по всем пользователям':
+            return PatronageJob.send_users_data(update, context)
+        elif text == 'Получить список пациентов':
+            return PatronageJob.send_patients_list(update, context)
+        else:
+            context.bot.send_message(update.effective_chat.id,
+                                     'Комманда не распознана')
+            return MESSAGE_HANDLER
+
+    @staticmethod
+    def send_user_file(update: Update, context: CallbackContext):
+        text = 'Введите код пациента'
+        context.bot.send_message(update.effective_chat.id, text)
+        context.user_data[ENTER_TOKEN] = True
+        return SEND_USER_DATA_PAT
+
+    @staticmethod
+    def send_user_data(update: Update, context: CallbackContext):
+        user_code = update.message.text
+        patient = PatientUser.get_patient_by_id(user_code)
+        if patient:
+            PatronageUser.make_file_by_patient(patient)
+            context.bot.send_document(
+                update.effective_chat,
+                open(f'static/{patient.user_code}.xlsx', 'rb'))
+        else:
+            update.message.reply_text('Пациента с таким кодом не существует')
+        return MESSAGE_HANDLER
+
+    @staticmethod
+    def send_users_data(update:Update, context:CallbackContext):
+        PatronageUser.make_file_patients()
+        context.bot.send_document(
+            chat_id=update.effective_chat.id,
+            document=open(f'static/statistics.xlsx', 'rb'))
+        return MESSAGE_HANDLER
+
+    @staticmethod
+    def send_patients_list(update:Update, context: CallbackContext):
+
+        return MESSAGE_HANDLER

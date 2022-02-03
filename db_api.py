@@ -4,6 +4,7 @@ from data.patronage import Patronage
 from data.accept_time import AcceptTime
 from data.record import Record
 from typing import Any
+import pandas as pd
 
 
 def create_session():
@@ -32,8 +33,13 @@ def get_patient_by_chat_id(chat_id: int) -> Patient:
     return db_sess.query(Patient).filter(Patient.chat_id == chat_id).first()
 
 
+def get_patient_by_user_code(user_code: str) -> Patient:
+    return db_sess.query(Patient).filter(Patient.user_code == user_code).first()
+
+
 def get_all_patients() -> list:
-    return db_sess.query(Patient.chat_id, AcceptTime.time).join(AcceptTime).all()
+    return db_sess.query(Patient.chat_id, AcceptTime.time).join(
+        AcceptTime).all()
 
 
 def change_patients_time_zone(chat_id: int, time_zone: int) -> None:
@@ -58,7 +64,29 @@ def get_patronage_by_chat_id(chat_id: int) -> Patronage:
     return db_sess.query(Patronage).filter(Patronage.chat_id == chat_id).first()
 
 
-def add_record(**kwargs: Any) -> None:
+def add_record(patient, **kwargs: Any) -> None:
     record = Record(**kwargs)
-    db_sess.add(record)
     db_sess.commit()
+
+
+# def make_file_by_patient(patient):
+#     arr_sys_press, arr_dias_press, arr_heart_rate, arr_time, arr_time_zone, \
+#     arr_id = [], [], [], [], [], []
+#     for accept_time in patient.accept_time:
+#         for record in accept_time.record:
+#             arr_sys_press.append(record.sys_press)
+#             arr_dias_press.append(record.dias_press)
+#             arr_heart_rate.append(record.heart_rate)
+#             arr_time.append(record.time)
+#             arr_time_zone.append(record.time_zone)
+#     df = pd.DataFrame({'Систолическое давление': arr_sys_press,
+#                        'Диастолическое давление': arr_dias_press,
+#                        'Частота сердечных сокращений': arr_heart_rate,
+#                        'Время приема таблеток и измерений': arr_time,
+#                        'Часовой пояс': arr_time_zone})
+#     df.to_excel('static/' + patient.user_code + '.xlsx')
+    # accept_time = db_sess.query(AcceptTime).filter(
+    #     AcceptTime == patient.accept_time).all()
+    # print(accept_time)
+    # response = db_sess.query(Record).filter(Record.accept_time == accept_time)
+    # print(response)

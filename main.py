@@ -6,7 +6,7 @@ from telegram.ext import CommandHandler
 
 from modules.restore import Restore
 from tools.prepared_answers import *
-from modules.start_dialogs import StartDialog
+from modules.start_dialogs import StartDialog, PatronageJob
 from modules.notification_dailogs import PillTakingDialog, DataCollectionDialog
 from modules.timer import *
 from tools.tools import get_from_env
@@ -48,6 +48,8 @@ def main():
     dp.add_handler(PillTakingDialog())
     dp.add_handler(DataCollectionDialog())
 
+    dp.add_handler(PatronageJob())
+
     # dp.add_handler(CommandHandler("set", set_timer,
     #     #                               pass_args=True,
     #     #                               pass_job_queue=True,
@@ -60,6 +62,7 @@ def main():
     dp.add_handler(MessageHandler(Filters.command, unknown))
 
     dp.add_handler(MessageHandler(Filters.text, echo))
+
     # dp.add_handler(MessageHandler(Filters.location, Location.add_location))
     updater.start_polling()
     # Ждём завершения приложения.
