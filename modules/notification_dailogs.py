@@ -28,7 +28,7 @@ class PillTakingDialog(ConversationHandler):
                 ]
             },
             fallbacks=[CommandHandler('stop', self.stop),
-                       CallbackQueryHandler(self.stop,
+                       CallbackQueryHandler(self.start,
                                             pattern=f'^{PILL_TAKING}$')
                        ]
         )
@@ -87,8 +87,7 @@ class PillTakingDialog(ConversationHandler):
         else:
             # Если сообщения отличаются
             # (т.е. сообщение обновилось, то завершаем диалог)
-            if user.active_dialog_msg and \
-                    user.msg_to_del != user.active_dialog_msg:
+            if user.is_msg_updated():
                 user.active_dialog_msg = None
                 return END
 
@@ -145,19 +144,13 @@ class PillTakingDialog(ConversationHandler):
 
     @staticmethod
     def stop(update: Update, context: CallbackContext):
-        """Перезапуск диалога после его остановки."""
-
-        # Если пользователь заново начал диалог через кнопку, то перезапускаем.
-        if update.callback_query and \
-                update.callback_query.data == f'{PILL_TAKING}':
-            return PillTakingDialog.start(update, context)
-
-        # Если пользователь ввел команду /stop, диалог останавливается.
-        context.bot.delete_message(update.effective_chat.id,
-                                   context.user_data[
-                                       'user'].msg_to_del.message_id)
-        PillTakingDialog.pre_start(
-            context, data={'user': context.user_data['user']})
+        user = context.user_data['user']
+        # Если сообщение еще не обновилось
+        if not user.is_msg_updated():
+            # Если пользователь ввел команду /stop, диалог останавливается.
+            context.bot.delete_message(update.effective_chat.id,
+                                       user.msg_to_del.message_id)
+            PillTakingDialog.pre_start(context, data={'user': user})
         return END
 
 
@@ -241,8 +234,7 @@ class DataCollectionDialog(ConversationHandler):
         else:
             # Если сообщения отличаются
             # (т.е. сообщение обновилось, то завершаем диалог)
-            if user.active_dialog_msg and \
-                    user.msg_to_del != user.active_dialog_msg:
+            if user.is_msg_updated():
                 user.active_dialog_msg = None
                 return END
             # Удаляем pre-start сообщение перед началом диалога
@@ -297,17 +289,12 @@ class DataCollectionDialog(ConversationHandler):
 
     @staticmethod
     def stop(update: Update, context: CallbackContext):
-        """Перезапуск диалога после его остановки.
-        См. PillTakingDialog.stop
-        """
-        if update.callback_query and \
-                update.callback_query.data == f'{DATA_COLLECT}':
-            return DataCollectionDialog.start(update, context)
+        user = context.user_data['user']
+        # Если сообщение еще не обновилось
+        if not user.is_msg_updated():
+            context.bot.delete_message(update.effective_chat.id,
+                                       user.msg_to_del.message_id)
 
-        context.bot.delete_message(update.effective_chat.id,
-                                   context.user_data[
-                                       'user'].msg_to_del.message_id)
-
-        DataCollectionDialog.pre_start(
-            context, data={'user': context.user_data['user']})
+            DataCollectionDialog.pre_start(
+                context, data={'user': context.user_data['user']})
         return END

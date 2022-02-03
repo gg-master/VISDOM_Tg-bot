@@ -5,7 +5,7 @@ from telegram.ext import (
     Filters, CallbackQueryHandler,
 )
 
-from modules.users_classes import BasicUser, Patient
+from modules.users_classes import BasicUser, PatientUser
 from tools.prepared_answers import START_MSG
 from modules.dialogs_shortcuts.start_shortcuts import *
 from tools.decorators import not_registered_users
@@ -59,10 +59,7 @@ class StartDialog(ConversationHandler):
 
     @staticmethod
     def stop_nested(update: Update, context: CallbackContext):
-        keyboard = ReplyKeyboardMarkup([['/start']])
-        update.message.reply_text(text='Регистрация прервана.\nЧтобы повторно '
-                                       'начать регистрацию отправьте:\n/start',
-                                  reply_markup=keyboard)
+        StartDialog.stop(update, context)
         return STOPPING
 
 
@@ -100,7 +97,7 @@ class PatientRegistrationDialog(ConversationHandler):
     @staticmethod
     def start(update: Update, context: CallbackContext):
         if type(context.user_data['user']) is BasicUser:
-            context.user_data['user'] = Patient()
+            context.user_data['user'] = PatientUser()
 
         location = context.user_data['user'].location
         code = context.user_data['user'].code
@@ -173,7 +170,7 @@ class PatientRegistrationDialog(ConversationHandler):
 
         # TODO добавить кнопки для обычного общения с системой
         keyboard = ReplyKeyboardMarkup(
-            [['/help', '/settings']], row_width=1, resize_keyboard=True)
+            [['Справка', 'Настройки']], row_width=1, resize_keyboard=True)
 
         context.bot.send_message(
             update.effective_chat.id, text=text, reply_markup=keyboard)

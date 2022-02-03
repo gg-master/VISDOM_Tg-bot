@@ -24,7 +24,7 @@ class BasicUser:
         self.is_registered = True
 
 
-class Patient(BasicUser):
+class PatientUser(BasicUser):
     # Ограничители времени
     time_limiters = {
         'MOR': [dt.datetime(1212, 12, 12, 6, 00, 0),
@@ -89,8 +89,7 @@ class Patient(BasicUser):
 
         context.user_data['user'] = UserNotifications(
             context, update.effective_chat.id, self._times, tz_str)
-        # TODO
-        # Регистрация в БД
+        # TODO Регистрация в БД
 
 
 class UserNotifications(BasicUser):
@@ -105,11 +104,11 @@ class UserNotifications(BasicUser):
         # Локализуем время уведомлений по часовому поясу пользователя
         self.times = {k: self.tz.localize(times[k]) for k in times.keys()}
         # self.times = {
-        #     'MOR': dt.time(0, 48, 0, tzinfo=pytz.timezone('Etc/GMT-3')),
-        #     'EVE': dt.time(0, 49, 0, tzinfo=pytz.timezone('Etc/GMT-3'))
+        #     'MOR': dt.time(14, 35, 0, tzinfo=pytz.timezone('Etc/GMT-3')),
+        #     'EVE': dt.time(14, 36, 0, tzinfo=pytz.timezone('Etc/GMT-3'))
         # }
         # Ограничители для времени уведомлений
-        self.time_limiters = Patient.time_limiters
+        self.time_limiters = PatientUser.time_limiters
 
         # Сообщения, которые отправляются пользователю при получении
         # уведомлений. Сохраняем их для функции удаления старых сообщений
@@ -160,6 +159,10 @@ class UserNotifications(BasicUser):
         self.pill_response = None
         self.data_response = {'sys': None, 'dias': None, 'heart': None}
 
+    def is_msg_updated(self):
+        return self.active_dialog_msg and \
+               self.msg_to_del != self.active_dialog_msg
 
-class Patronage(BasicUser):
+
+class PatronageUser(BasicUser):
     pass

@@ -66,10 +66,10 @@ def daily_task(context: CallbackContext):
     # Создаем новую циклическую задачу
     context.job_queue.run_repeating(
         callback=repeating_task,
-        # interval=20,
-        # last=dt.datetime.now(pytz.utc) + dt.timedelta(seconds=20*4),
-        interval=data['task_data']['interval'],
-        last=data['task_data']['last'],
+        interval=20,
+        last=dt.datetime.now(pytz.utc) + dt.timedelta(seconds=20*4),
+        # interval=data['task_data']['interval'],
+        # last=data['task_data']['last'],
         context=data,
         name=user.rep_task_name
     )
