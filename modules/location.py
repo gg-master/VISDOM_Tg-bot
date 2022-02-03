@@ -28,9 +28,9 @@ class Location:
 
     @staticmethod
     def validate_tz(tz):
-        if tz[0] not in ('+', '-') or not tz[1:].isdigit() or \
-                not (-10 <= int(tz[1:]) <= 10):
-            raise ValueError()
+        if type(tz) is str and (tz[0] not in ('+', '-') or not tz[1:].isdigit()
+                                or not (-10 <= int(tz[1:]) <= 10)):
+            raise ValueError(f'Not correct tz: {tz}')
         return tz
 
     def location(self):
@@ -129,15 +129,14 @@ class FindLocationDialog(ConversationHandler):
         return FindLocationDialog.input_address(update, context)
 
     @staticmethod
-    def location_response(update: Update, context: CallbackContext):
+    def location_response(update: Update, context: CallbackContext, self=None):
         """
         Проверка результата поиска через апи.
         Сохранение позиции, полученной через геометку ТГ.
-        :param update:
-        :param context:
-        :return:
         """
         from modules.start_dialogs import PatientRegistrationDialog
+
+
         response = update.message.text
         location = update.message.location
 
@@ -153,7 +152,8 @@ class FindLocationDialog(ConversationHandler):
                 context.user_data['user'].location = Location(
                     location={'Нет адреса': [location.longitude,
                                              location.latitude]})
-
+        if self:
+            return self.start(update, context)
         return PatientRegistrationDialog.start(update, context)
 
     @staticmethod
@@ -218,3 +218,17 @@ class FindLocationDialog(ConversationHandler):
                                                      toponym_lattitude]})
 
         return static_api_request
+
+
+class ChangeLocationDialog(FindLocationDialog):
+    def __init__(self):
+        super().__init__()
+        self.map_to_parent.update({
+            'SETTINGS_ACTION': END
+        })
+
+    @staticmethod
+    def location_response(update: Update, context: CallbackContext, *args):
+        from modules.settings_dialogs import SettingsDialog
+        return FindLocationDialog.location_response(
+            update, context, SettingsDialog)
