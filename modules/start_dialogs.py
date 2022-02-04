@@ -6,8 +6,7 @@ from telegram.ext import (
 )
 
 from modules.patronage_dialogs import PatronageJob
-from modules.users_classes import BasicUser, PatientUser, PatronageUser, \
-    PatientNotifications
+from modules.users_classes import BasicUser, PatientUser, PatronageUser
 from tools.prepared_answers import START_MSG
 from modules.dialogs_shortcuts.start_shortcuts import *
 from tools.decorators import not_registered_users
@@ -17,18 +16,10 @@ from tools.tools import get_from_env
 def user_separation(func):
     def decorated_func(update: Update, context: CallbackContext):
         user = context.user_data.get('user')
-        if not user or type(user) is BasicUser:
+        if not user or not user.registered():
             return func(update, context)
-        elif not user.registered():
-            update.message.reply_text(START_MSG)
-            if type(user) is PatientUser:
-                context.user_data[REGISTRATION_OVER] = True
-                PatientRegistrationDialog.start(update, context)
-            if type(user) is PatronageUser:
-                PatronageRegistrationDialog.start(update, context)
-            return START_SELECTORS
         else:
-            if type(user) is PatientNotifications:
+            if type(user) is PatientUser:
                 PatientRegistrationDialog.restore_main_msg(update, context)
             elif type(user) is PatronageUser:
                 # TODO добавить функцию восстановления кнопок для патронажа
@@ -125,7 +116,7 @@ class PatientRegistrationDialog(ConversationHandler):
     @staticmethod
     def start(update: Update, context: CallbackContext):
         if type(context.user_data['user']) is BasicUser:
-            context.user_data['user'] = PatientUser()
+            context.user_data['user'] = PatientUser(update.effective_chat.id)
 
         location = context.user_data['user'].location
         code = context.user_data['user'].code
@@ -149,7 +140,7 @@ class PatientRegistrationDialog(ConversationHandler):
             if location and code else '',
 
             [InlineKeyboardButton(text='Добавить код' if not code else
-            'Изменить код', callback_data=f'{CONF_CODE}'),
+             'Изменить код', callback_data=f'{CONF_CODE}'),
 
              InlineKeyboardButton(text='Добавить часовой пояс' if not location
              else 'Изменить часовой пояс', callback_data=f'{CONF_TZ}')],
@@ -232,7 +223,7 @@ class PatientRegistrationDialog(ConversationHandler):
 
 
 class ConfigureTZDialog(ConversationHandler):
-    def __init__(self, loc_d=None):
+    def __init__(self, loc_d=None, **kwargs):
         from modules.location import FindLocationDialog
         super().__init__(
             name=self.__class__.__name__,
@@ -250,8 +241,11 @@ class ConfigureTZDialog(ConversationHandler):
             },
             fallbacks=[
                 CallbackQueryHandler(self.back, pattern=f'^{END}$'),
-                CommandHandler('stop', StartDialog.stop_nested,
-                               run_async=False)
+                CommandHandler('stop',
+                               StartDialog.stop_nested if not
+                               kwargs.get('stop_cb') else
+                               kwargs.get('stop_cb'), run_async=False)
+
             ],
             map_to_parent={STOPPING: STOPPING}
         )
@@ -290,7 +284,8 @@ class ConfigureTZDialog(ConversationHandler):
 
     @staticmethod
     def conf_tz(update: Update, context: CallbackContext):
-        text = 'Введите Ваш часовой пояс в следующем формате: +3 или -3'
+        text = 'Введите Ваш часовой пояс в следующем формате:\n ' \
+               '+(-){Ваш часовой пояс}\nПример: +3'
         update.callback_query.answer()
         update.callback_query.edit_message_text(text=text)
         return TYPING_TZ
@@ -332,7 +327,7 @@ class ConfigureNotifTimeDialog(ConversationHandler):
         [InlineKeyboardButton(text='Назад', callback_data=f'{END}')]
     ]
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         super().__init__(
             name=self.__class__.__name__,
             entry_points=[CallbackQueryHandler(
@@ -351,8 +346,9 @@ class ConfigureNotifTimeDialog(ConversationHandler):
             },
             fallbacks=[
                 CallbackQueryHandler(self.back, pattern=f'^{END}$'),
-                CommandHandler('stop', StartDialog.stop_nested,
-                               run_async=False),
+                CommandHandler('stop', StartDialog.stop_nested if not
+                               kwargs.get('stop_cb') else
+                               kwargs.get('stop_cb'), run_async=False),
             ],
             map_to_parent={
                 STOPPING: STOPPING
@@ -411,8 +407,8 @@ class ConfigureNotifTimeDialog(ConversationHandler):
     @staticmethod
     def time_change(update: Update, context: CallbackContext):
         tm = context.user_data['tm']
-        res = context.user_data["user"].add_minutes(tm,
-                                                    update.callback_query.data)
+        res = context.user_data["user"].add_minutes(
+            tm, update.callback_query.data)
 
         text = f'Изменение времени получения ' \
                f'{"вечерних" if context.user_data["tm"] == "EVE" else "утренних"}' \

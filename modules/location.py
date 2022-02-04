@@ -51,8 +51,12 @@ class Location:
                    f'{int(self._time_zone)}'
 
     def __ne__(self, other):
-        return (int(self.time_zone()), self.location()) \
-               != (int(other.time_zone()), other.location())
+        if other:
+            return (int(self.time_zone()) if self.time_zone() else None,
+                    self.location()) \
+                   != (int(other.time_zone()) if self.time_zone() else None,
+                       other.location())
+        return True
 
 
 class FindLocationDialog(ConversationHandler):
@@ -62,7 +66,7 @@ class FindLocationDialog(ConversationHandler):
             name=self.__class__.__name__,
             entry_points=[CallbackQueryHandler(
                 self.start, pattern=f'^{CONF_LOCATION}$')]
-            if not kwargs else kwargs.get('e_points'),
+            if not kwargs.get('e_points') else kwargs.get('e_points'),
 
             states={
                 1: [MessageHandler(Filters.regex('^Найти адрес$'),
@@ -76,8 +80,12 @@ class FindLocationDialog(ConversationHandler):
                 3: [MessageHandler(Filters.regex('^Да, верно$|^Нет, неверно$'),
                                    self.location_response, run_async=False)],
             },
-            fallbacks=[CommandHandler('stop', StartDialog.stop_nested,
-                                      run_async=False)],
+            fallbacks=[
+                CommandHandler('stop', StartDialog.stop_nested,
+                               run_async=False)
+                if not kwargs.get('fallbacks') else kwargs.get('fallbacks')
+            ]
+            ,
             map_to_parent={
                 PATIENT_REGISTRATION_ACTION: END,
                 STOPPING: STOPPING,
@@ -86,7 +94,6 @@ class FindLocationDialog(ConversationHandler):
 
     @staticmethod
     def start(update: Update, context: CallbackContext):
-
         kboard = ReplyKeyboardMarkup(
             [
                 [KeyboardButton(text="Отправить геолокацию",
@@ -99,6 +106,9 @@ class FindLocationDialog(ConversationHandler):
         if not context.user_data.get(LOCATION_OVER):
             update.callback_query.answer()
             update.callback_query.delete_message()
+            if context.chat_data.get('st_msg'):
+                context.chat_data['st_msg'] = None
+
         context.bot.send_message(
             update.effective_chat.id,
             text='Выберите способ добавления местоположения',
@@ -226,10 +236,13 @@ class FindLocationDialog(ConversationHandler):
 
 class ChangeLocationDialog(FindLocationDialog):
     def __init__(self):
-        from modules.settings_dialogs import SETTINGS_ACTION
-        super().__init__()
+        from modules.settings_dialogs import SETTINGS_ACTION, SettingsDialog
+        super().__init__(
+            fallbacks=CommandHandler('stop', SettingsDialog.stop_nested,
+                                     run_async=False))
         self.map_to_parent.update({
-            SETTINGS_ACTION: END
+            SETTINGS_ACTION: END,
+            STOPPING: STOPPING
         })
 
     @staticmethod

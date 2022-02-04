@@ -4,7 +4,7 @@ from telegram.ext import ConversationHandler, MessageHandler, Filters, \
     CommandHandler, CallbackQueryHandler, CallbackContext
 
 from modules.dialogs_shortcuts.start_shortcuts import \
-    END, CONF_TZ, CONF_NOTIFICATIONS
+    END, CONF_TZ, CONF_NOTIFICATIONS, STOPPING
 from modules.start_dialogs import ConfigureTZDialog, ConfigureNotifTimeDialog
 from tools.decorators import registered_patient
 
@@ -80,8 +80,8 @@ class SettingsDialog(ConversationHandler):
             update.callback_query.edit_message_text(text=text,
                                                     reply_markup=keyboard)
         else:
-            update.message.reply_text(text=text, reply_markup=keyboard)
-
+            msg = update.message.reply_text(text=text, reply_markup=keyboard)
+            context.chat_data['st_msg'] = msg
         context.user_data[SETTINGS_OVER] = False
         return SETTINGS_ACTION
 
@@ -101,8 +101,7 @@ class SettingsDialog(ConversationHandler):
 
         update.callback_query.delete_message()
 
-        context.bot.send_message(
-            update.effective_chat.id, text=text, reply_markup=keyboard)
+        update.effective_chat.send_message(text=text, reply_markup=keyboard)
         return END
 
     @staticmethod
@@ -114,16 +113,28 @@ class SettingsDialog(ConversationHandler):
         keyboard = ReplyKeyboardMarkup(
             [['Справка', 'Настройки']], row_width=1, resize_keyboard=True)
 
-        update.callback_query.delete_message()
+        if update.callback_query:
+            update.callback_query.delete_message()
+        elif context.chat_data.get('st_msg'):
+            context.bot.delete_message(update.effective_chat.id,
+                                       context.chat_data['st_msg'].message_id)
 
-        context.bot.send_message(
-            update.effective_chat.id, text=text, reply_markup=keyboard)
+        update.effective_chat.send_message(text=text, reply_markup=keyboard)
         return END
+
+    @staticmethod
+    def stop_nested(update: Update, context: CallbackContext):
+        SettingsDialog.stop(update, context)
+        return STOPPING
 
 
 class SettingsConfNotifTimeDialog(ConfigureNotifTimeDialog):
     def __init__(self):
-        super().__init__()
+        super().__init__(stop_cb=SettingsDialog.stop_nested)
+        self.map_to_parent.update({
+            STOPPING: END,
+            END: END
+        })
 
     @staticmethod
     def start(update: Update, context: CallbackContext, *args):
@@ -144,7 +155,11 @@ class SettingsConfNotifTimeDialog(ConfigureNotifTimeDialog):
 class SettingsConfTZDialog(ConfigureTZDialog):
     def __init__(self):
         from modules.location import ChangeLocationDialog
-        super().__init__(ChangeLocationDialog)
+        super().__init__(ChangeLocationDialog,
+                         stop_cb=SettingsDialog.stop_nested)
+        self.map_to_parent.update({
+            STOPPING: END,
+        })
 
     @staticmethod
     def save_tz(update: Update, context: CallbackContext, *args):

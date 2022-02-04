@@ -22,16 +22,14 @@ def unknown(update: Update, context: CallbackContext):
 
 
 def help_msg(update: Update, context: CallbackContext):
-    from modules.users_classes import BasicUser, PatientUser, \
-        PatronageUser, PatientNotifications
+    from modules.users_classes import BasicUser, PatientUser, PatronageUser
     if not context.user_data.get('user'):
         update.message.reply_text("Справка.\nЧтобы начать работу с ботом "
                                   "введите /start.")
     elif type(context.user_data.get('user')) is BasicUser:
         update.message.reply_text(
             "Справка.\nЧтобы получить больше возможностей зарегистрируйтесь.")
-    elif type(context.user_data.get('user')) in \
-            [PatientUser, PatientNotifications]:
+    elif type(context.user_data.get('user')) is PatientUser:
         update.message.reply_text("Справка. Команды Для пациента.")
     elif type(context.user_data.get('user')) is PatronageUser:
         update.message.reply_text("Справка. Команды для патронажа.")

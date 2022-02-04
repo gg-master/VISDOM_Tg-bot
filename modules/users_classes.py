@@ -49,73 +49,16 @@ class PatientUser(BasicUser):
         'EVE': dt.datetime(1212, 12, 12, 20, 00, 0)
     }
 
-    def __init__(self):
+    def __init__(self, chat_id: int):
         super().__init__()
-        self.code = self.location = None
-        self._times = self.default_times.copy()
-
-    def times(self):
-        return dict(map(lambda x: (x, self._times[x].strftime("%H:%M")),
-                        self._times.keys()))
-
-    def add_minutes(self, time, minutes):
-        # Добавление минут
-        delta = dt.timedelta(minutes=int(minutes))
-        self._times[time] += delta
-        # Ограничение времени
-        if not (self.time_limiters[time][0] <= self._times[time]
-                <= self.time_limiters[time][1]):
-            self._times[time] -= delta
-            return False
-        return True
-
-    def register(self, update: Update, context: CallbackContext):
-        super().register()
-        logging.info(f'REGISTER NEW USER: '
-                     f'{update.effective_user.id} - {self.code}')
-        thread = Thread(target=self._threading_reg, args=(update, context))
-        thread.start()
-        thread.join()
-
-    def _threading_reg(self, update: Update, context: CallbackContext):
-        tz_str = convert_tz(self.location.get_coords(),
-                            self.location.time_zone())
-        # Конвертирование из datetime в time
-        self._times = {k: self._times[k].time() for k in self._times.keys()}
-
-        context.user_data['user'] = PatientNotifications(
-            context, update.effective_chat.id, self._times, tz_str)
-        # TODO Регистрация в БД
-
-    @staticmethod
-    def get_patient_by_id(user_code):
-        return db_sess.query(Patient).filter(
-            Patient.user_code == user_code).first()
-
-
-class PatientNotifications(PatientUser):
-    def __init__(self, context: CallbackContext, chat_id: int,
-                 times: Dict[str, dt.time], tz_str: str):
-        super().__init__()
-        BasicUser.register(self)
-
         # Id чата с пользователем
         self.chat_id = chat_id
-        # Конвертирование часового пояса из строки в объект
-        self.tz = pytz.timezone(tz_str)
 
-        self.location = Location(tz=-int(re.search(
-            pattern=r'[+-]?\d+', string=self.tz.zone).group(0)))
-        self.orig_location = self.location
+        self.code = None
 
-        # Преобразуем dt.time в dt.datetime
-        self._times = {k: self.default_times[k].replace(
-            hour=times[k].hour, minute=times[k].minute) for k in times.keys()}
-        self.orig_times = self._times.copy()
-        # self.times = {
-        #     'MOR': dt.time(14, 35, 0, tzinfo=pytz.timezone('Etc/GMT-3')),
-        #     'EVE': dt.time(14, 36, 0, tzinfo=pytz.timezone('Etc/GMT-3'))
-        # }
+        self.location = self.tz = None
+        self._times = self.default_times.copy()
+        self.orig_loc = self.orig_t = None
 
         # Сообщения, которые отправляются пользователю при получении
         # уведомлений. Сохраняем их для функции удаления старых сообщений
@@ -133,7 +76,20 @@ class PatientNotifications(PatientUser):
         self.pill_response = None
         self.data_response = {'sys': None, 'dias': None, 'heart': None}
 
-        self.create_notification(context)
+    def times(self):
+        return dict(map(lambda x: (x, self._times[x].strftime("%H:%M")),
+                        self._times.keys()))
+
+    def add_minutes(self, time, minutes):
+        # Добавление минут
+        delta = dt.timedelta(minutes=int(minutes))
+        self._times[time] += delta
+        # Ограничение времени
+        if not (self.time_limiters[time][0] <= self._times[time]
+                <= self.time_limiters[time][1]):
+            self._times[time] -= delta
+            return False
+        return True
 
     def create_notification(self, context: CallbackContext):
         for name, notification_time in list(self._times.items())[:]:
@@ -178,24 +134,62 @@ class PatientNotifications(PatientUser):
 
     def cancel_updating(self):
         """Возвращение значений времени и ЧП к начальным значениям"""
-        self._times = self.orig_times.copy()
-        self.location = self.orig_location
+        self._times = self.orig_t.copy()
+        self.location = self.orig_loc
 
     def save_updating(self, context: CallbackContext):
         """Сохранение изменение настроект ЧП и времени уведомлений"""
         # TODO запрос в бд на изменение времени
         # TODO запрос на проверку времеи последней записи
-        if self._times != self.orig_times or \
-                self.location != self.orig_location:
-            if self.location != self.orig_location:
+        if self._times != self.orig_t or self.location != self.orig_loc:
+            if self.location != self.orig_loc:
                 self.tz = pytz.timezone(convert_tz(self.location.get_coords(),
                                                    self.location.time_zone()))
-            self.orig_times = self._times.copy()
+                self.orig_loc = self.location = Location(tz=-int(re.search(
+                    pattern=r'[+-]?\d+', string=self.tz.zone).group(0)))
+            if self._times != self.orig_t:
+                self.orig_t = self._times.copy()
             self.recreate_notification(context)
 
     def is_msg_updated(self):
         return self.active_dialog_msg and \
                self.msg_to_del != self.active_dialog_msg
+
+    def restore(self, context: CallbackContext,
+                times: Dict[str, dt.time], tz_str: str):
+        # Конвертирование часового пояса из строки в объект
+        self.tz = pytz.timezone(tz_str)
+
+        self.location = Location(tz=-int(re.search(
+            pattern=r'[+-]?\d+', string=self.tz.zone).group(0)))
+
+        # Преобразуем dt.time в dt.datetime
+        self._times = {k: self.default_times[k].replace(
+            hour=times[k].hour, minute=times[k].minute) for k in times.keys()}
+
+        # self._times = {
+        #     'MOR': dt.time(14, 35, 0, tzinfo=pytz.timezone('Etc/GMT-3')),
+        #     'EVE': dt.time(14, 36, 0, tzinfo=pytz.timezone('Etc/GMT-3'))
+        # }
+
+        self.save_updating(context)
+
+    def register(self, update: Update, context: CallbackContext):
+        super().register()
+        logging.info(f'REGISTER NEW USER: '
+                     f'{update.effective_user.id} - {self.code}')
+        thread = Thread(target=self._threading_reg, args=(update, context))
+        thread.start()
+        thread.join()
+
+    def _threading_reg(self, update: Update, context: CallbackContext):
+        self.save_updating(context)
+        # TODO Регистрация в БД
+
+    @staticmethod
+    def get_patient_by_id(user_code):
+        return db_sess.query(Patient).filter(
+            Patient.user_code == user_code).first()
 
 
 class PatronageUser(BasicUser):
