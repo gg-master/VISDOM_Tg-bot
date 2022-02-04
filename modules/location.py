@@ -6,7 +6,7 @@ from telegram.ext import CallbackContext, ConversationHandler, \
 
 from tools.prepared_answers import BAD_GEOCODER_RESP
 from tools.tools import get_from_env
-from modules.settings_dialogs import SETTINGS_ACTION
+
 from modules.dialogs_shortcuts.start_shortcuts import (
     PATIENT_REGISTRATION_ACTION,
     CONF_TZ_OVER,
@@ -47,7 +47,12 @@ class Location:
             return f'{address} - ({self._location[address][0]}, ' \
                    f'{self._location[address][1]})'
         elif self._time_zone and not self._location:
-            return f'{self._time_zone}'
+            return f'{"+" if int(self._time_zone) >= 0 else ""}' \
+                   f'{int(self._time_zone)}'
+
+    def __ne__(self, other):
+        return (int(self.time_zone()), self.location()) \
+               != (int(other.time_zone()), other.location())
 
 
 class FindLocationDialog(ConversationHandler):
@@ -221,6 +226,7 @@ class FindLocationDialog(ConversationHandler):
 
 class ChangeLocationDialog(FindLocationDialog):
     def __init__(self):
+        from modules.settings_dialogs import SETTINGS_ACTION
         super().__init__()
         self.map_to_parent.update({
             SETTINGS_ACTION: END

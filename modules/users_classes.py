@@ -1,8 +1,8 @@
 import re
 
 import pytz
-import datetime as dt
 import logging
+import datetime as dt
 from threading import Thread
 from typing import Dict
 
@@ -11,7 +11,7 @@ from telegram.ext import CallbackContext
 
 from modules.location import Location
 from modules.notification_dailogs import PillTakingDialog, DataCollectionDialog
-from modules.timer import create_daily_notification
+from modules.timer import create_daily_notification, remove_job_if_exists
 from tools.tools import convert_tz
 
 from data.patronage import Patronage
@@ -19,6 +19,8 @@ from data.patient import Patient
 
 from pandas import DataFrame
 from data import db_session
+
+
 db_session.global_init()
 db_sess = db_session.create_session()
 
@@ -43,22 +45,14 @@ class PatientUser(BasicUser):
                 dt.datetime(1212, 12, 12, 21, 00, 0)]
     }
     default_times = {
-            'MOR': dt.datetime(1212, 12, 12, 8, 00, 0),
-            'EVE': dt.datetime(1212, 12, 12, 20, 00, 0)
-        }
+        'MOR': dt.datetime(1212, 12, 12, 8, 00, 0),
+        'EVE': dt.datetime(1212, 12, 12, 20, 00, 0)
+    }
 
     def __init__(self):
         super().__init__()
-        self._code = self.location = None
+        self.code = self.location = None
         self._times = self.default_times.copy()
-
-    @property
-    def code(self):
-        return self._code
-
-    @code.setter
-    def code(self, code):
-        self._code = code
 
     def times(self):
         return dict(map(lambda x: (x, self._times[x].strftime("%H:%M")),
@@ -77,8 +71,8 @@ class PatientUser(BasicUser):
 
     def register(self, update: Update, context: CallbackContext):
         super().register()
-        logging.info(f'REGISTER NEW USER: {update.effective_user.id}'
-                     f' - {self._code}')
+        logging.info(f'REGISTER NEW USER: '
+                     f'{update.effective_user.id} - {self.code}')
         thread = Thread(target=self._threading_reg, args=(update, context))
         thread.start()
         thread.join()
@@ -89,19 +83,22 @@ class PatientUser(BasicUser):
         # Конвертирование из datetime в time
         self._times = {k: self._times[k].time() for k in self._times.keys()}
 
-        context.user_data['user'] = UserNotifications(
+        context.user_data['user'] = PatientNotifications(
             context, update.effective_chat.id, self._times, tz_str)
         # TODO Регистрация в БД
 
     @staticmethod
     def get_patient_by_id(user_code):
-        return db_sess.query(Patient).filter(Patient.user_code == user_code).first()
+        return db_sess.query(Patient).filter(
+            Patient.user_code == user_code).first()
 
 
-class UserNotifications(PatientUser):
+class PatientNotifications(PatientUser):
     def __init__(self, context: CallbackContext, chat_id: int,
                  times: Dict[str, dt.time], tz_str: str):
         super().__init__()
+        BasicUser.register(self)
+
         # Id чата с пользователем
         self.chat_id = chat_id
         # Конвертирование часового пояса из строки в объект
@@ -109,10 +106,12 @@ class UserNotifications(PatientUser):
 
         self.location = Location(tz=-int(re.search(
             pattern=r'[+-]?\d+', string=self.tz.zone).group(0)))
+        self.orig_location = self.location
 
         # Преобразуем dt.time в dt.datetime
         self._times = {k: self.default_times[k].replace(
             hour=times[k].hour, minute=times[k].minute) for k in times.keys()}
+        self.orig_times = self._times.copy()
         # self.times = {
         #     'MOR': dt.time(14, 35, 0, tzinfo=pytz.timezone('Etc/GMT-3')),
         #     'EVE': dt.time(14, 36, 0, tzinfo=pytz.timezone('Etc/GMT-3'))
@@ -150,6 +149,10 @@ class UserNotifications(PatientUser):
                         self.time_limiters[name][1]).time()},
             )
 
+    def recreate_notification(self, context: CallbackContext):
+        remove_job_if_exists(self.rep_task_name, context)
+        self.create_notification(context)
+
     def state(self):
         """Возвращает имя временного таймера и состояние
         (т.е. в каком диалоге находится пользователь)"""
@@ -167,6 +170,29 @@ class UserNotifications(PatientUser):
         self.pill_response = None
         self.data_response = {'sys': None, 'dias': None, 'heart': None}
 
+    def drop_notif_time(self):
+        if self._times == self.default_times:
+            return False
+        self._times = self.default_times.copy()
+        return True
+
+    def cancel_updating(self):
+        """Возвращение значений времени и ЧП к начальным значениям"""
+        self._times = self.orig_times.copy()
+        self.location = self.orig_location
+
+    def save_updating(self, context: CallbackContext):
+        """Сохранение изменение настроект ЧП и времени уведомлений"""
+        # TODO запрос в бд на изменение времени
+        # TODO запрос на проверку времеи последней записи
+        if self._times != self.orig_times or \
+                self.location != self.orig_location:
+            if self.location != self.orig_location:
+                self.tz = pytz.timezone(convert_tz(self.location.get_coords(),
+                                                   self.location.time_zone()))
+            self.orig_times = self._times.copy()
+            self.recreate_notification(context)
+
     def is_msg_updated(self):
         return self.active_dialog_msg and \
                self.msg_to_del != self.active_dialog_msg
@@ -175,11 +201,10 @@ class UserNotifications(PatientUser):
 class PatronageUser(BasicUser):
     def register(self, update: Update, context: CallbackContext):
         super().register()
-        # logging.info(f'REGISTER NEW USER: {update.effective_user.id}'
-        #              f' - {self._code}')
-        thread = Thread(target=self._threading_reg, args=(update, context))
-        thread.start()
-        thread.join()
+        logging.info(f'REGISTER NEW PATRONAGE: {update.effective_user.id}')
+        # thread = Thread(target=self._threading_reg, args=(update, context))
+        # thread.start()
+        # thread.join()
 
     def _threading_reg(self, update: Update, context: CallbackContext):
         patronage = Patronage(chat_id=update.effective_chat.id)

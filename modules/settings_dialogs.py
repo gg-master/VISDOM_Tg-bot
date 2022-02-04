@@ -6,6 +6,7 @@ from telegram.ext import ConversationHandler, MessageHandler, Filters, \
 from modules.dialogs_shortcuts.start_shortcuts import \
     END, CONF_TZ, CONF_NOTIFICATIONS
 from modules.start_dialogs import ConfigureTZDialog, ConfigureNotifTimeDialog
+from tools.decorators import registered_patient
 
 (
     # State
@@ -14,7 +15,7 @@ from modules.start_dialogs import ConfigureTZDialog, ConfigureNotifTimeDialog
     SETTINGS_OVER,
     DROP_NOTIF_TIME,
     CONFIRM
-) = map(chr, range(4))
+) = map(chr, range(200, 200 + 4))
 
 
 class SettingsDialog(ConversationHandler):
@@ -38,8 +39,23 @@ class SettingsDialog(ConversationHandler):
         )
 
     @staticmethod
+    @registered_patient
     def start(update: Update, context: CallbackContext):
-        text = 'Настройки'
+        # TODO проверить пользователя в бд
+        user = context.user_data["user"]
+        text = 'Здравствуйте, это окно настроек.\n' \
+               'Здесь Вы можете изменить время получения уведомлений или ' \
+               'свой часовой пояс. \n' \
+               'При необходимости Вы можете сбросить время получения ' \
+               'уведомлений до значений по умолчанию.\n' \
+               'Чтобы сохранить изменения нажмите "Подтвердить"'
+
+        text += f'\n\nВаши данные:' \
+                f'\nЧасовой пояс: {user.location}' \
+                f'\nВремя получения утреннего уведомления: ' \
+                f'{user.times()["MOR"]}\n' \
+                f'Время получения вечернего уведомления: ' \
+                f'{user.times()["EVE"]}' \
 
         buttons = [
             [
@@ -71,10 +87,28 @@ class SettingsDialog(ConversationHandler):
 
     @staticmethod
     def drop_notif_time(update: Update, context: CallbackContext):
-        pass
+        res = context.user_data['user'].drop_notif_time()
+        if res:
+            context.user_data[SETTINGS_OVER] = True
+            return SettingsDialog.start(update, context)
+
+    @staticmethod
+    def confirm(update: Update, context: CallbackContext):
+        context.user_data['user'].save_updating(context)
+        text = 'Изменения сохранены.'
+        keyboard = ReplyKeyboardMarkup(
+            [['Справка', 'Настройки']], row_width=1, resize_keyboard=True)
+
+        update.callback_query.delete_message()
+
+        context.bot.send_message(
+            update.effective_chat.id, text=text, reply_markup=keyboard)
+        return END
 
     @staticmethod
     def stop(update: Update, context: CallbackContext):
+        context.user_data['user'].cancel_updating()
+
         text = "Изменения не были сохранеы."
 
         keyboard = ReplyKeyboardMarkup(

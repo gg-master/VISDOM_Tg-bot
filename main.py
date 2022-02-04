@@ -1,9 +1,8 @@
 import logging
 
 from telegram import Update
-from telegram.ext import (
-    CommandHandler, Updater, MessageHandler, Filters, Defaults
-)
+from telegram.ext import CommandHandler, Updater, MessageHandler, \
+    Filters, Defaults
 
 from modules.restore import Restore
 from modules.start_dialogs import StartDialog, PatronageJob
@@ -23,20 +22,32 @@ def unknown(update: Update, context: CallbackContext):
 
 
 def help_msg(update: Update, context: CallbackContext):
-    update.message.reply_text("Справка")
+    from modules.users_classes import BasicUser, PatientUser, \
+        PatronageUser, PatientNotifications
+    if not context.user_data.get('user'):
+        update.message.reply_text("Справка.\nЧтобы начать работу с ботом "
+                                  "введите /start.")
+    elif type(context.user_data.get('user')) is BasicUser:
+        update.message.reply_text(
+            "Справка.\nЧтобы получить больше возможностей зарегистрируйтесь.")
+    elif type(context.user_data.get('user')) in \
+            [PatientUser, PatientNotifications]:
+        update.message.reply_text("Справка. Команды Для пациента.")
+    elif type(context.user_data.get('user')) is PatronageUser:
+        update.message.reply_text("Справка. Команды для патронажа.")
 
 
 def echo(update: Update, context: CallbackContext):
-    date: dt.datetime = update.message.date
+    date = update.message.date
     print(date, end=' - ')
     print(date.hour, date.tzinfo)
     print(update.message.location)
-    print(update.message.chat_id, '-', update.effective_user.id, '-', update.effective_chat.id)
+    print(update.message.chat_id, '-', update.effective_user.id, '-',
+          update.effective_chat.id)
     update.message.reply_text(update.message.text)
 
 
 def main():
-    # chat_id = 721698752
     updater = Updater(get_from_env('TOKEN'),
                       use_context=True, defaults=Defaults(run_async=True))
 

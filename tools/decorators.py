@@ -1,5 +1,6 @@
 from telegram import Update
 from telegram.ext import CallbackContext
+from modules.users_classes import PatronageUser, PatientNotifications
 
 
 def not_registered_users(func):
@@ -12,10 +13,10 @@ def not_registered_users(func):
     return decorated_func
 
 
-def registered_users(func):
+def registered_patient(func):
     def decorated_func(update: Update, context: CallbackContext):
         user = context.user_data.get('user')
-        if user and user.registered():
+        if type(user) is PatientNotifications:
             return func(update, context)
         return just_for_registered_msg(update, context)
 
@@ -23,12 +24,26 @@ def registered_users(func):
 
 
 def just_for_not_registered_msg(update: Update, context: CallbackContext):
-    context.bot.send_message(update.effective_chat.id,
-                             text='Эта возможность предумотрена только для '
-                                  'незарегистрированных пользователей')
+    update.effective_chat.send_message(
+        'Эта возможность предумотрена только для '
+        'незарегистрированных пользователей')
 
 
 def just_for_registered_msg(update: Update, context: CallbackContext):
-    context.bot.send_message(update.effective_chat.id,
-                             text='Эта возможность предумотрена только для '
-                                  'зарегистрированных пользователей')
+    update.effective_chat.send_message(
+        'Эта возможность предумотрена только для '
+        'зарегистрированных пользователей')
+
+
+def registered_patronages(func):
+    def decorator(update: Update, context: CallbackContext):
+        user = context.user_data.get('user')
+        if type(user) is PatronageUser and user.registered():
+            return func(update, context)
+        return just_for_patronage(update, context)
+    return decorator
+
+
+def just_for_patronage(update: Update, context: CallbackContext):
+    update.effective_chat.send_message(
+        'Это возможность предусмотрена только для специальных сотрудников')

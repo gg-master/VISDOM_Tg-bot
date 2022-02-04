@@ -1,13 +1,14 @@
-import os
+import logging
 import sqlalchemy as sa
 import sqlalchemy.orm as orm
-from dotenv import load_dotenv
-from sqlalchemy.orm import Session
 import sqlalchemy.ext.declarative as dec
-import logging
+
+from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 from tools.tools import get_from_env
 
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s %(levelname)s %(name)s %(message)s')
 
 SqlAlchemyBase = dec.declarative_base()
 
@@ -20,18 +21,7 @@ def global_init():
 
     if __factory:
         return
-    # os.chdir('..')
     db_address = get_from_env('DB_ADDRESS')
-    # if os.path.exists(path):
-    #     load_dotenv(path)
-    # try:
-    #     db_address = os.environ.get('DB_ADDRESS')
-    #     if db_address is None:
-    #         raise AttributeError("param DB_PASS is 'NoneType'")
-    # except Exception as ex:
-    #     logging.error(f'Probably not found .env file'
-    #                   f'\nEXCEPTION: {ex}')
-    #     return None
 
     conn_str = db_address
     # print(f"Подключение к базе данных по адресу {conn_str}")

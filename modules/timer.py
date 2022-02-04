@@ -1,8 +1,4 @@
-import pytz
-import datetime as dt
-
-from telegram.ext import CallbackContext, ConversationHandler, \
-    DispatcherHandlerStop
+from telegram.ext import CallbackContext
 
 
 def remove_job_if_exists(name, context: CallbackContext):
@@ -23,15 +19,16 @@ def create_daily_notification(context: CallbackContext, **kwargs):
         # Добавляем задачу в очередь
 
         # Удаляем старую задачу с таким же именем
-        remove_job_if_exists(f'{chat_id} - {kwargs["name"]}', context)
+        remove_job_if_exists(f'{chat_id}-{kwargs["name"]}', context)
 
-        context.job_queue.run_daily(
+        job = context.job_queue.run_daily(
             callback=daily_task,
             # when=5,
             time=kwargs['time'],
             context=kwargs,
             name=f'{chat_id}-{kwargs["name"]}'
         )
+        # print(job.next_t)
     except (IndexError, ValueError):
         context.bot.send_message(chat_id, 'Произошла ошибка про попытке '
                                           'включить таймер. Обратитесь к '
@@ -39,6 +36,7 @@ def create_daily_notification(context: CallbackContext, **kwargs):
 
 
 def daily_task(context: CallbackContext):
+    # TODO запрос на проверку даты последней записи
     """Таски, которые выполняются ежедневно утром и вечером"""
     job = context.job
     data = job.context
@@ -66,16 +64,17 @@ def daily_task(context: CallbackContext):
     # Создаем новую циклическую задачу
     context.job_queue.run_repeating(
         callback=repeating_task,
-        interval=20,
-        last=dt.datetime.now(pytz.utc) + dt.timedelta(seconds=20*4),
-        # interval=data['task_data']['interval'],
-        # last=data['task_data']['last'],
+        # interval=20,
+        # last=dt.datetime.now(pytz.utc) + dt.timedelta(seconds=20*4),
+        interval=data['task_data']['interval'],
+        last=data['task_data']['last'],
         context=data,
         name=user.rep_task_name
     )
 
 
 def repeating_task(context: CallbackContext):
+    # TODO запрос на проверку даты последней записи
     job = context.job
     data = job.context
 
