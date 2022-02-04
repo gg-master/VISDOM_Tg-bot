@@ -92,7 +92,9 @@ class PillTakingDialog(ConversationHandler):
                 return END
 
             # Удаляем pre-start сообщение перед началом диалога
-            context.bot.delete_message(user.chat_id, user.msg_to_del.message_id)
+            if not user.active_dialog_msg:
+                context.bot.delete_message(user.chat_id,
+                                           user.msg_to_del.message_id)
 
             # Отправляем новое сообщение
             msg = context.bot.send_message(
@@ -238,7 +240,9 @@ class DataCollectionDialog(ConversationHandler):
                 user.active_dialog_msg = None
                 return END
             # Удаляем pre-start сообщение перед началом диалога
-            context.bot.delete_message(user.chat_id, user.msg_to_del.message_id)
+            if not user.active_dialog_msg:
+                context.bot.delete_message(user.chat_id,
+                                           user.msg_to_del.message_id)
             # Отправляем новое сообщение
             msg = context.bot.send_message(
                 user.chat_id, text=text, reply_markup=keyboard)

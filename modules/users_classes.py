@@ -167,11 +167,6 @@ class PatientUser(BasicUser):
         self._times = {k: self.default_times[k].replace(
             hour=times[k].hour, minute=times[k].minute) for k in times.keys()}
 
-        # self._times = {
-        #     'MOR': dt.time(14, 35, 0, tzinfo=pytz.timezone('Etc/GMT-3')),
-        #     'EVE': dt.time(14, 36, 0, tzinfo=pytz.timezone('Etc/GMT-3'))
-        # }
-
         self.save_updating(context)
 
     def register(self, update: Update, context: CallbackContext):
@@ -183,6 +178,11 @@ class PatientUser(BasicUser):
         thread.join()
 
     def _threading_reg(self, update: Update, context: CallbackContext):
+        # self.tz = pytz.timezone('Etc/GMT-3')
+        # self._times = {
+        #     'MOR': dt.time(19, 13, 0),
+        #     'EVE': dt.time(19, 14, 0)
+        # }
         self.save_updating(context)
         # TODO Регистрация в БД
 
