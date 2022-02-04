@@ -1,5 +1,5 @@
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, \
-    KeyboardButton, InlineKeyboardButton, ReplyKeyboardRemove
+    InlineKeyboardButton, ReplyKeyboardRemove
 from telegram.ext import (
     CallbackContext, CommandHandler, MessageHandler,
     Filters, CallbackQueryHandler,
@@ -60,10 +60,7 @@ class StartDialog(ConversationHandler):
 
     @staticmethod
     def stop_nested(update: Update, context: CallbackContext):
-        keyboard = ReplyKeyboardMarkup([['/start']])
-        update.message.reply_text(text='Регистрация прервана.\nЧтобы повторно '
-                                       'начать регистрацию отправьте:\n/start',
-                                  reply_markup=keyboard)
+        StartDialog.stop(update, context)
         return STOPPING
 
 
@@ -125,7 +122,7 @@ class PatientRegistrationDialog(ConversationHandler):
             if location and code else '',
 
             [InlineKeyboardButton(text='Добавить код' if not code else
-            'Изменить код', callback_data=f'{CONF_CODE}'),
+             'Изменить код', callback_data=f'{CONF_CODE}'),
 
              InlineKeyboardButton(text='Добавить часовой пояс' if not location
              else 'Изменить часовой пояс', callback_data=f'{CONF_TZ}')],
@@ -161,11 +158,11 @@ class PatientRegistrationDialog(ConversationHandler):
     def end_reg(update: Update, context: CallbackContext):
         text = f"Поздравляем, вы зарегистрированы в системе!\n\n" \
                f"Теперь каждый день в " \
-               f"{context.user_data['user'].times['MOR']} " \
+               f"{context.user_data['user'].times()['MOR']} " \
                f"чат-бот напомнит Вам принять " \
                f"лекарство, а также измерить и сообщить артериальное " \
                f"давление и частоту сердечных сокращений. \n\n" \
-               f"В {context.user_data['user'].times['EVE']} " \
+               f"В {context.user_data['user'].times()['EVE']} " \
                f"напомнит о необходимости измерить и сообщить " \
                f"артериальное давление и частоту сердечных сокращений еще раз"
 
@@ -174,7 +171,7 @@ class PatientRegistrationDialog(ConversationHandler):
 
         # TODO добавить кнопки для обычного общения с системой
         keyboard = ReplyKeyboardMarkup(
-            [['/help', '/settings']], row_width=1, resize_keyboard=True)
+            [['Справка', 'Настройки']], row_width=1, resize_keyboard=True)
 
         context.bot.send_message(
             update.effective_chat.id, text=text, reply_markup=keyboard)
@@ -190,7 +187,7 @@ class PatientRegistrationDialog(ConversationHandler):
 
 
 class ConfigureTZDialog(ConversationHandler):
-    def __init__(self):
+    def __init__(self, loc_d=None):
         from modules.location import FindLocationDialog
         super().__init__(
             name=self.__class__.__name__,
@@ -198,7 +195,7 @@ class ConfigureTZDialog(ConversationHandler):
                 CallbackQueryHandler(self.start, pattern=f'^{CONF_TZ}$')],
             states={
                 CONF_TZ_ACTION: [
-                    FindLocationDialog(),
+                    FindLocationDialog() if not loc_d else loc_d(),
                     CallbackQueryHandler(self.conf_tz, pattern=f'^{CONF_TZ}$')
                 ],
                 TYPING_TZ: [
@@ -207,7 +204,7 @@ class ConfigureTZDialog(ConversationHandler):
                 ]
             },
             fallbacks=[
-                CallbackQueryHandler(self.back_to_reg, pattern=f'^{END}$'),
+                CallbackQueryHandler(self.back, pattern=f'^{END}$'),
                 CommandHandler('stop', StartDialog.stop_nested,
                                run_async=False)
             ],
@@ -254,24 +251,27 @@ class ConfigureTZDialog(ConversationHandler):
         return TYPING_TZ
 
     @staticmethod
-    def save_tz(update: Update, context: CallbackContext):
+    def save_tz(update: Update, context: CallbackContext, self=None):
         from modules.location import Location
         msg = update.message.text
         try:
             context.user_data['user'].location = Location(tz=msg)
 
             context.user_data[REGISTRATION_OVER] = True
-            PatientRegistrationDialog.start(update, context)
-            return END
+
+            if not self:
+                return ConfigureTZDialog.back(update, context)
         except ValueError:
             context.user_data[CONF_TZ_OVER] = True
             text = 'Часовой пояс был введен в неправильном формате. ' \
                    'Попробуйте снова.'
             update.message.reply_text(text=text)
-            return ConfigureTZDialog.start(update, context)
+
+            if not self:
+                return ConfigureTZDialog.start(update, context)
 
     @staticmethod
-    def back_to_reg(update: Update, context: CallbackContext):
+    def back(update: Update, context: CallbackContext):
         PatientRegistrationDialog.start(update, context)
         return END
 
@@ -296,7 +296,7 @@ class ConfigureNotifTimeDialog(ConversationHandler):
                 CONF_NOTIF_ACTIONS: [
                     CallbackQueryHandler(self.conf_time,
                                          pattern=f'^MORNING_TIME$|'
-                                                 f'^EVENING_TIME')
+                                                 f'^EVENING_TIME$')
                 ],
                 TIME_CHANGE: [
                     CallbackQueryHandler(self.time_change,
@@ -305,7 +305,7 @@ class ConfigureNotifTimeDialog(ConversationHandler):
                 ]
             },
             fallbacks=[
-                CallbackQueryHandler(self.back_to_reg, pattern=f'^{END}$'),
+                CallbackQueryHandler(self.back, pattern=f'^{END}$'),
                 CommandHandler('stop', StartDialog.stop_nested,
                                run_async=False),
             ],
@@ -315,19 +315,21 @@ class ConfigureNotifTimeDialog(ConversationHandler):
         )
 
     @staticmethod
-    def start(update: Update, context: CallbackContext):
+    def start(update: Update, context: CallbackContext, t=None):
 
         text = f'Настройте время получения напоминаний (время МЕСТНОЕ) или ' \
                f'завершите регистрацию, нажав кнопку \n' \
                f'"Завершить регистрацию" \n\n' \
                f'Время получения утреннего уведомления: ' \
-               f'{context.user_data["user"].times["MOR"]}\n' \
+               f'{context.user_data["user"].times()["MOR"]}\n' \
                f'Время получения вечернего уведомления: ' \
-               f'{context.user_data["user"].times["EVE"]}'
+               f'{context.user_data["user"].times()["EVE"]}' \
+            if not t else t
 
         buttons = [
             [InlineKeyboardButton(text="Завершить регистрацию",
-                                  callback_data=f'{FINISH_REGISTRATION}')],
+                                  callback_data=f'{FINISH_REGISTRATION}')]
+            if not t else '',
 
             [InlineKeyboardButton(text='Изменить утреннее время',
                                   callback_data=f'MORNING_TIME'),
@@ -352,7 +354,7 @@ class ConfigureNotifTimeDialog(ConversationHandler):
             text = f'Изменение времени получения утренних уведомлений.\n'
         else:
             text = f'Изменение времени получения вечерних уведомлений.\n'
-        text += f'Время: {context.user_data["user"].times[tm]}'
+        text += f'Время: {context.user_data["user"].times()[tm]}'
 
         keyboard = InlineKeyboardMarkup(ConfigureNotifTimeDialog.buttons)
 
@@ -375,10 +377,10 @@ class ConfigureNotifTimeDialog(ConversationHandler):
             return TIME_CHANGE
 
         if not res:
-            text += f'Крайне время: {context.user_data["user"].times[tm]}'
+            text += f'Крайне время: {context.user_data["user"].times()[tm]}'
             context.user_data['lim'] = True
         else:
-            text += f'Время: {context.user_data["user"].times[tm]}'
+            text += f'Время: {context.user_data["user"].times()[tm]}'
             context.user_data['lim'] = False
 
         keyboard = InlineKeyboardMarkup(ConfigureNotifTimeDialog.buttons)
@@ -389,7 +391,7 @@ class ConfigureNotifTimeDialog(ConversationHandler):
         return TIME_CHANGE
 
     @staticmethod
-    def back_to_reg(update: Update, context: CallbackContext):
+    def back(update: Update, context: CallbackContext):
         PatientRegistrationDialog.start(update, context)
         return END
 

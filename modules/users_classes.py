@@ -1,3 +1,5 @@
+import re
+
 import pytz
 import datetime as dt
 import logging
@@ -40,14 +42,15 @@ class PatientUser(BasicUser):
         'EVE': [dt.datetime(1212, 12, 12, 17, 00, 0),
                 dt.datetime(1212, 12, 12, 21, 00, 0)]
     }
-
-    def __init__(self):
-        super().__init__()
-        self._code = self._location = None
-        self._times = {
+    default_times = {
             'MOR': dt.datetime(1212, 12, 12, 8, 00, 0),
             'EVE': dt.datetime(1212, 12, 12, 20, 00, 0)
         }
+
+    def __init__(self):
+        super().__init__()
+        self._code = self.location = None
+        self._times = self.default_times.copy()
 
     @property
     def code(self):
@@ -57,15 +60,6 @@ class PatientUser(BasicUser):
     def code(self, code):
         self._code = code
 
-    @property
-    def location(self):
-        return self._location
-
-    @location.setter
-    def location(self, location: Location):
-        self._location = location
-
-    @property
     def times(self):
         return dict(map(lambda x: (x, self._times[x].strftime("%H:%M")),
                         self._times.keys()))
@@ -90,22 +84,21 @@ class PatientUser(BasicUser):
         thread.join()
 
     def _threading_reg(self, update: Update, context: CallbackContext):
-        tz_str = convert_tz(self._location.get_coords(),
-                            self._location.time_zone())
+        tz_str = convert_tz(self.location.get_coords(),
+                            self.location.time_zone())
         # Конвертирование из datetime в time
         self._times = {k: self._times[k].time() for k in self._times.keys()}
 
         context.user_data['user'] = UserNotifications(
             context, update.effective_chat.id, self._times, tz_str)
-        # TODO
-        # Регистрация в БД
+        # TODO Регистрация в БД
 
     @staticmethod
     def get_patient_by_id(user_code):
         return db_sess.query(Patient).filter(Patient.user_code == user_code).first()
 
 
-class UserNotifications(BasicUser):
+class UserNotifications(PatientUser):
     def __init__(self, context: CallbackContext, chat_id: int,
                  times: Dict[str, dt.time], tz_str: str):
         super().__init__()
@@ -114,14 +107,16 @@ class UserNotifications(BasicUser):
         # Конвертирование часового пояса из строки в объект
         self.tz = pytz.timezone(tz_str)
 
-        # Локализуем время уведомлений по часовому поясу пользователя
-        # self.times = {k: self.tz.localize(times[k]) for k in times.keys()}
-        self.times = {
-            'MOR': dt.time(20, 24, 0, tzinfo=pytz.timezone('Etc/GMT-3')),
-            'EVE': dt.time(20, 28, 0, tzinfo=pytz.timezone('Etc/GMT-3'))
-        }
-        # Ограничители для времени уведомлений
-        self.time_limiters = PatientUser.time_limiters
+        self.location = Location(tz=-int(re.search(
+            pattern=r'[+-]?\d+', string=self.tz.zone).group(0)))
+
+        # Преобразуем dt.time в dt.datetime
+        self._times = {k: self.default_times[k].replace(
+            hour=times[k].hour, minute=times[k].minute) for k in times.keys()}
+        # self.times = {
+        #     'MOR': dt.time(14, 35, 0, tzinfo=pytz.timezone('Etc/GMT-3')),
+        #     'EVE': dt.time(14, 36, 0, tzinfo=pytz.timezone('Etc/GMT-3'))
+        # }
 
         # Сообщения, которые отправляются пользователю при получении
         # уведомлений. Сохраняем их для функции удаления старых сообщений
@@ -142,10 +137,10 @@ class UserNotifications(BasicUser):
         self.create_notification(context)
 
     def create_notification(self, context: CallbackContext):
-        for name, notification_time in list(self.times.items())[:]:
+        for name, notification_time in list(self._times.items())[:]:
             create_daily_notification(
                 context=context,
-                time=notification_time,
+                time=self.tz.localize(notification_time),
                 name=name,
                 user=self,
                 task_data={
@@ -171,6 +166,10 @@ class UserNotifications(BasicUser):
     def clear_responses(self):
         self.pill_response = None
         self.data_response = {'sys': None, 'dias': None, 'heart': None}
+
+    def is_msg_updated(self):
+        return self.active_dialog_msg and \
+               self.msg_to_del != self.active_dialog_msg
 
 
 class PatronageUser(BasicUser):
