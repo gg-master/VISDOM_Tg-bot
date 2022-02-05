@@ -22,7 +22,6 @@ from db_api import get_patient_by_chat_id, add_patient
 from pandas import DataFrame
 from data import db_session
 
-
 db_session.global_init()
 db_sess = db_session.create_session()
 
@@ -158,8 +157,8 @@ class PatientUser(BasicUser):
         return self.active_dialog_msg and \
                self.msg_to_del != self.active_dialog_msg
 
-    def restore(self, context, times: Dict[str, dt.time],
-                tz_str: str, accept_times=None):
+    def restore(self, times: Dict[str, dt.time], tz_str: str,
+                accept_times=None):
         # Конвертирование часового пояса из строки в объект
         self.tz = pytz.timezone(tz_str)
 
@@ -170,7 +169,17 @@ class PatientUser(BasicUser):
         self.times = {k: self.default_times[k].replace(
             hour=times[k].hour, minute=times[k].minute) for k in times.keys()}
 
-        self.save_updating(context)
+        self.accept_times = accept_times
+        self.orig_t = self.times
+        self.orig_loc = self.location
+
+        now = dt.datetime.now(tz=self.tz)
+        if self.tz.localize(self.times['MOR']).time() < now.time() < \
+                self.tz.localize(self.times['EVE']).time():
+            self.set_curr_state('MOR')
+        else:
+            self.set_curr_state('EVE')
+        print(self.state())
 
     def register(self, update: Update, context: CallbackContext):
         super().register()
@@ -183,8 +192,8 @@ class PatientUser(BasicUser):
     def _threading_reg(self, update: Update, context: CallbackContext):
         self.tz = pytz.timezone('Etc/GMT-3')
         self.times = {
-            'MOR': dt.datetime(1212, 12, 12, 12, 19, 30),
-            'EVE': dt.datetime(1212, 12, 12, 12, 22, 0)
+            'MOR': dt.datetime(1212, 12, 12, 14, 45, 0),
+            'EVE': dt.datetime(1212, 12, 12, 14, 50, 0)
         }
         # from db_api import
         #

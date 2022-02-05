@@ -21,7 +21,7 @@ class PillTakingDialog(ConversationHandler):
                                          pattern=f'^{CONFIRM_PILL_TAKING}$'),
                     CallbackQueryHandler(self.reason,
                                          pattern=f'^{CANT_PILL_TAKING}$'),
-                    CallbackQueryHandler(self.end, pattern=f'^{END}$')
+                    CallbackQueryHandler(self.end, pattern='END_PILL_TAKING')
                 ],
                 TYPING: [
                     MessageHandler(Filters.text & ~Filters.command,
@@ -49,7 +49,7 @@ class PillTakingDialog(ConversationHandler):
         msg = context.bot.send_message(data['user'].chat_id,
                                        text=text,
                                        reply_markup=keyboard)
-
+        print(context.user_data)
         user = context.job.context['user'] if context.job \
             else context.user_data['user']
         user.msg_to_del = msg
@@ -71,7 +71,8 @@ class PillTakingDialog(ConversationHandler):
                    f'\n\nВаш ответ: {response}'
 
         buttons = [
-            [InlineKeyboardButton(text='Подтвердить', callback_data=f'{END}')]
+            [InlineKeyboardButton(text='Подтвердить',
+                                  callback_data='END_PILL_TAKING')]
             if response else '',
             [InlineKeyboardButton(text='Я принял лекарство',
                                   callback_data=f'{CONFIRM_PILL_TAKING}')]
@@ -168,7 +169,7 @@ class DataCollectionDialog(ConversationHandler):
                 DATA_COLLECT_ACTION: [
                     CallbackQueryHandler(self.input_req,
                                          pattern=f'^SYS$|^DIAS$|^HEART$'),
-                    CallbackQueryHandler(self.end, pattern=f'^{END}$')
+                    CallbackQueryHandler(self.end, pattern=f'END_DATA_COLLECT')
                 ],
                 TYPING: [
                     MessageHandler(Filters.text & ~Filters.command,
@@ -222,7 +223,7 @@ class DataCollectionDialog(ConversationHandler):
         keyboard = InlineKeyboardMarkup(
             [
                 [InlineKeyboardButton(text='Подтвердить',
-                                      callback_data=f'{END}')]
+                                      callback_data=f'END_DATA_COLLECT')]
                 if all(response.values()) else '',
                 [InlineKeyboardButton(text='Ввести САД'
                  if not sys else 'Изменить САД', callback_data=f'SYS'),
@@ -285,8 +286,9 @@ class DataCollectionDialog(ConversationHandler):
     def end(update: Update, context: CallbackContext):
         from modules.users_classes import PatientUser
         print(context.user_data['user'].data_response)
-        # TODO запрос в бд для сохранения данных
         user: PatientUser = context.user_data['user']
+
+        # TODO запрос в бд для сохранения данных
         add_record(
             time=user.times[user.state()[0]].time(),
             sys_press=user.data_response['sys'],
@@ -295,6 +297,7 @@ class DataCollectionDialog(ConversationHandler):
             time_zone=user.tz.zone,
             accept_time_id=user.accept_times[user.state()[0]]
         )
+        user.clear_responses()
 
         text = "Мы сохранили Ваш ответ. Спасибо!"
 

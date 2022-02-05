@@ -144,7 +144,7 @@ class FindLocationDialog(ConversationHandler):
         return FindLocationDialog.input_address(update, context)
 
     @staticmethod
-    def location_response(update: Update, context: CallbackContext, self=None):
+    def location_response(update: Update, context: CallbackContext, ret=None):
         """
         Проверка результата поиска через апи.
         Сохранение позиции, полученной через геометку ТГ.
@@ -166,8 +166,8 @@ class FindLocationDialog(ConversationHandler):
                 context.user_data['user'].location = Location(
                     location={'Нет адреса': [location.longitude,
                                              location.latitude]})
-        if self:
-            return self.start(update, context)
+        if ret:
+            return ret(update, context)
         return PatientRegistrationDialog.start(update, context)
 
     @staticmethod
@@ -249,4 +249,4 @@ class ChangeLocationDialog(FindLocationDialog):
     def location_response(update: Update, context: CallbackContext, *args):
         from modules.settings_dialogs import SettingsDialog
         return FindLocationDialog.location_response(
-            update, context, SettingsDialog)
+            update, context, SettingsDialog.start)

@@ -5,23 +5,31 @@ from telegram.ext import CallbackContext, ConversationHandler, \
     CallbackQueryHandler, CommandHandler
 
 from modules.dialogs_shortcuts.start_shortcuts import END
-from db_api import get_patient_by_chat_id, get_accept_time_by_patient
+from db_api import get_patient_by_chat_id, get_accept_time_by_patient, get_all_patients
 
 
 class Restore:
     def __init__(self, dispatcher):
         self.context = CallbackContext(dispatcher)
-        self.users = [(721698752, [dt.time(11, 45, 30), dt.time(11, 26, 0)],
-                       'Etc/GMT-3')]
-        # self.restore_patient(self.users[0])
 
-    def restore_patient(self, data):
+        self.restore_all_patient()
+
+    def restore_all_patient(self):
+        patients = get_all_patients()
+        for patient in patients:
+            if patient.chat_id != 394:
+                accept_times = get_accept_time_by_patient(patient)
+                self.restore_patient(patient, accept_times)
+
+    def restore_patient(self, patient, accept_times):
         from modules.users_classes import PatientUser
-        chat_id, times, tz = data
-        times = {'MOR': times[0], 'EVE': times[1]}
-        p = PatientUser(chat_id)
-        p.restore(self.context, times, tz)
-        Restore.restore_msg(self.context, chat_id=chat_id)
+
+        times = {'MOR': accept_times[0].time, 'EVE': accept_times[1].time}
+        p = PatientUser(patient.chat_id)
+        p.restore(times, patient.time_zone)
+        p.recreate_notification(self.context)
+
+        Restore.restore_msg(self.context, chat_id=patient.chat_id)
 
     @staticmethod
     def restore_msg(context, **kwargs):
@@ -49,10 +57,9 @@ def patient_restore_handler(update: Update, context: CallbackContext):
     context.user_data['user'] = \
         PatientUser(update.effective_chat.id)
     context.user_data['user'].restore(
-        context,
         {
-            # 'MOR': accept_times[0].time,
-            'MOR': dt.time(hour=11, minute=45),
+            'MOR': accept_times[0].time,
+            # 'MOR': dt.time(hour=11, minute=45),
             'EVE': accept_times[1].time
         },
         tz_str=p.time_zone,

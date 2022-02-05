@@ -28,7 +28,6 @@ def create_daily_notification(context: CallbackContext, **kwargs):
             context=kwargs,
             name=f'{chat_id}-{kwargs["name"]}'
         )
-        # print(job.next_t)
     except (IndexError, ValueError):
         context.bot.send_message(chat_id, 'Произошла ошибка про попытке '
                                           'включить таймер. Обратитесь к '

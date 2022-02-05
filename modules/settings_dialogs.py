@@ -8,14 +8,12 @@ from modules.dialogs_shortcuts.start_shortcuts import \
 from modules.start_dialogs import ConfigureTZDialog, ConfigureNotifTimeDialog
 from tools.decorators import registered_patient
 
-(
-    # State
-    SETTINGS_ACTION,
-    # Constants
-    SETTINGS_OVER,
-    DROP_NOTIF_TIME,
-    CONFIRM
-) = map(chr, range(200, 200 + 4))
+# State
+SETTINGS_ACTION = 'SETTINGS_ACTION'
+# Constants
+SETTINGS_OVER = 'SETTINGS_OVER'
+DROP_NOTIF_TIME = 'DROP_NOTIF_TIME'
+CONFIRM = 'CONFIRM'
 
 
 class SettingsDialog(ConversationHandler):
@@ -34,16 +32,15 @@ class SettingsDialog(ConversationHandler):
                 ]
             },
             fallbacks=[
-                 CallbackQueryHandler(self.stop, pattern=f'^{END}$'),
+                 CallbackQueryHandler(self.stop, pattern=f'CANCEL'),
                  CommandHandler('stop', self.stop)]
         )
 
     @staticmethod
     @registered_patient
     def start(update: Update, context: CallbackContext):
-        # TODO проверить пользователя в бд
         user = context.user_data["user"]
-        text = 'Здравствуйте, это окно настроек.\n' \
+        text = 'Настройки.\n' \
                'Здесь Вы можете изменить время получения уведомлений или ' \
                'свой часовой пояс. \n' \
                'При необходимости Вы можете сбросить время получения ' \
@@ -68,7 +65,7 @@ class SettingsDialog(ConversationHandler):
                 InlineKeyboardButton(text='Сбросить время уведомлений',
                                      callback_data=f'{DROP_NOTIF_TIME}'),
             ],
-            [InlineKeyboardButton(text='Отмена', callback_data=f'{END}'),
+            [InlineKeyboardButton(text='Отмена', callback_data='CANCEL'),
              InlineKeyboardButton(text='Подтвердить',
                                   callback_data=f'{CONFIRM}'),
              ]
@@ -159,13 +156,12 @@ class SettingsConfTZDialog(ConfigureTZDialog):
                          stop_cb=SettingsDialog.stop_nested)
         self.map_to_parent.update({
             STOPPING: END,
+            SETTINGS_ACTION: SETTINGS_ACTION
         })
 
     @staticmethod
     def save_tz(update: Update, context: CallbackContext, *args):
-        ConfigureTZDialog.save_tz(update, context, SettingsConfTZDialog)
-        SettingsDialog.start(update, context)
-        return END
+        return ConfigureTZDialog.save_tz(update, context, SettingsDialog.start)
 
     @staticmethod
     def back(update: Update, context: CallbackContext):

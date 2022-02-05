@@ -263,7 +263,7 @@ class ConfigureTZDialog(ConversationHandler):
                 ],
                 TYPING_TZ: [
                     MessageHandler(Filters.text & ~Filters.command,
-                                   self.save_tz)
+                                   self.save_tz, run_async=False)
                 ]
             },
             fallbacks=[
@@ -313,12 +313,16 @@ class ConfigureTZDialog(ConversationHandler):
     def conf_tz(update: Update, context: CallbackContext):
         text = 'Введите Ваш часовой пояс в следующем формате:\n ' \
                '+(-){Ваш часовой пояс}\nПример: +3'
-        update.callback_query.answer()
-        update.callback_query.edit_message_text(text=text)
+        if not context.user_data.get(CONF_TZ_OVER):
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(text=text)
+        else:
+            update.message.reply_text(text=text)
+        context.user_data[CONF_TZ_OVER] = False
         return TYPING_TZ
 
     @staticmethod
-    def save_tz(update: Update, context: CallbackContext, self=None):
+    def save_tz(update: Update, context: CallbackContext, ret=None):
         from modules.location import Location
         msg = update.message.text
         try:
@@ -326,16 +330,17 @@ class ConfigureTZDialog(ConversationHandler):
 
             context.user_data[REGISTRATION_OVER] = True
 
-            if not self:
+            if not ret:
                 return ConfigureTZDialog.back(update, context)
+            return ret(update, context)
         except ValueError:
             context.user_data[CONF_TZ_OVER] = True
             text = 'Часовой пояс был введен в неправильном формате. ' \
                    'Попробуйте снова.'
             update.message.reply_text(text=text)
 
-            if not self:
-                return ConfigureTZDialog.start(update, context)
+            context.user_data[CONF_TZ_OVER] = True
+            return ConfigureTZDialog.conf_tz(update, context)
 
     @staticmethod
     def back(update: Update, context: CallbackContext):

@@ -23,7 +23,11 @@ def add_accept_time(time, patient: Patient) -> int:
 
 
 def get_accept_time_by_patient(patient: Patient):
-    return db_sess.query(AcceptTime).filter(AcceptTime.patient_id == patient.id).all()
+    dbs = create_session()
+    res = dbs.query(AcceptTime).filter(
+        AcceptTime.patient_id == patient.id).all()
+    dbs.close()
+    return res
 
 
 def add_patient(time_morn, time_even, **kwargs: Any):
@@ -35,16 +39,17 @@ def add_patient(time_morn, time_even, **kwargs: Any):
 
 
 def get_patient_by_chat_id(chat_id: int) -> Patient:
-    return db_sess.query(Patient).filter(Patient.chat_id == chat_id).first()
-
+    dbs = create_session()
+    res = dbs.query(Patient).filter(Patient.chat_id == chat_id).first()
+    dbs.close()
+    return res
 
 def get_patient_by_user_code(user_code: str) -> Patient:
     return db_sess.query(Patient).filter(Patient.user_code == user_code).first()
 
 
 def get_all_patients() -> list:
-    return db_sess.query(Patient.chat_id, AcceptTime.time).join(
-        AcceptTime).all()
+    return db_sess.query(Patient).all()
 
 
 def change_patients_time_zone(chat_id: int, time_zone: int) -> None:
