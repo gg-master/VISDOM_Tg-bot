@@ -6,6 +6,7 @@ from telegram.ext import CallbackContext, ConversationHandler, \
 
 from modules.dialogs_shortcuts.start_shortcuts import END
 from db_api import get_patient_by_chat_id, get_accept_time_by_patient, get_all_patients
+from tools.decorators import not_registered_users
 
 
 class Restore:
@@ -28,6 +29,8 @@ class Restore:
         p = PatientUser(patient.chat_id)
         p.restore(times, patient.time_zone)
         p.recreate_notification(self.context)
+        if not self.context.job_queue.get_jobs_by_name(f'{p.chat_id}-rep_task'):
+           p.restore_repeating_task(self.context)
 
         Restore.restore_msg(self.context, chat_id=patient.chat_id)
 
@@ -47,6 +50,7 @@ class Restore:
             kwargs['chat_id'], text=text, reply_markup=keyboard)
 
 
+@not_registered_users
 def patient_restore_handler(update: Update, context: CallbackContext):
     from modules.users_classes import PatientUser
     from modules.start_dialogs import PatientRegistrationDialog
@@ -54,20 +58,22 @@ def patient_restore_handler(update: Update, context: CallbackContext):
     p = get_patient_by_chat_id(update.effective_chat.id)
     accept_times = get_accept_time_by_patient(p)
 
-    context.user_data['user'] = \
-        PatientUser(update.effective_chat.id)
+    context.user_data['user'] = PatientUser(update.effective_chat.id)
     context.user_data['user'].restore(
-        {
-            'MOR': accept_times[0].time,
-            # 'MOR': dt.time(hour=11, minute=45),
-            'EVE': accept_times[1].time
-        },
+        times={'MOR': accept_times[0].time, 'EVE': accept_times[1].time},
         tz_str=p.time_zone,
         accept_times={'MOR': accept_times[0].id,
                       'EVE': accept_times[1].id}
     )
+    # Если задачи на повторение не установлено, то пробуем ее установить.
+    # Если установщик не определит время следующего запуска, то удаляем задачу
+    if not context.job_queue.get_jobs_by_name(f'{p.chat_id}-rep_task'):
+        context.user_data['user'].restore_repeating_task(context)
+
     update.callback_query.delete_message()
-    update.effective_chat.send_message('Доступ восстановлен')
+    update.effective_chat.send_message(
+        'Доступ восстановлен. Теперь Вы можете добавить ответ на уведомления, '
+        'к которым не было доступа.')
     PatientRegistrationDialog.restore_main_msg(update, context)
 
 

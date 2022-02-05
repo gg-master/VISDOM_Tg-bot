@@ -11,7 +11,8 @@ from telegram.ext import CallbackContext
 
 from modules.location import Location
 from modules.notification_dailogs import PillTakingDialog, DataCollectionDialog
-from modules.timer import create_daily_notification, remove_job_if_exists
+from modules.timer import create_daily_notification, remove_job_if_exists, \
+    repeating_task
 from tools.tools import convert_tz
 
 from data.patronage import Patronage
@@ -110,6 +111,36 @@ class PatientUser(BasicUser):
         remove_job_if_exists(self.rep_task_name, context)
         self.create_notification(context)
 
+    def restore_repeating_task(self, context: CallbackContext):
+        """Восстановление повторяющихся сообщений"""
+        state_name = self.state()[0]
+        now = dt.datetime.now(tz=self.tz).time()
+
+        # Проверяем время в которое произошел рестарт.
+        # Если рестар был между лимитами определенного уведомления, то
+        # восстанавливаем репитер, чтобы отправить уведомление
+        first = self.tz.localize(self.times[state_name]).time()
+        last = self.tz.localize(self.time_limiters[state_name][1]).time()
+        if now < first or now > last:
+            return None
+        self.rep_task_name = f'{self.chat_id}-rep_task'
+        job = context.job_queue.run_repeating(
+            callback=repeating_task,
+            # interval=5,
+            # last=dt.datetime.now(pytz.utc) + dt.timedelta(seconds=20*4),
+            interval=dt.timedelta(hours=1) if state_name == 'MOR' \
+            else dt.timedelta(minutes=30),
+            first=first, last=last,
+            context={'user': self, 'name': state_name},
+            name=self.rep_task_name
+        )
+        try:
+            # Если время следующего запуска не определено, то удаляем.
+            if not job.next_t:
+                remove_job_if_exists(self.rep_task_name, context)
+        except AttributeError as e:
+            pass
+
     def state(self):
         """Возвращает имя временного таймера и состояние
         (т.е. в каком диалоге находится пользователь)"""
@@ -151,7 +182,11 @@ class PatientUser(BasicUser):
             if self.times != self.orig_t:
                 self.orig_t = self.times.copy()
 
+            # Восстанавливливаем уведомления
             self.recreate_notification(context)
+            if not context.job_queue.get_jobs_by_name(
+                    f'{self.chat_id}-rep_task'):
+                self.restore_repeating_task(context)
 
     def is_msg_updated(self):
         return self.active_dialog_msg and \
@@ -159,6 +194,7 @@ class PatientUser(BasicUser):
 
     def restore(self, times: Dict[str, dt.time], tz_str: str,
                 accept_times=None):
+        super().register()
         # Конвертирование часового пояса из строки в объект
         self.tz = pytz.timezone(tz_str)
 
@@ -173,13 +209,13 @@ class PatientUser(BasicUser):
         self.orig_t = self.times
         self.orig_loc = self.location
 
+        # Восстановление состояния диалога после рестарта бота
         now = dt.datetime.now(tz=self.tz)
         if self.tz.localize(self.times['MOR']).time() < now.time() < \
                 self.tz.localize(self.times['EVE']).time():
             self.set_curr_state('MOR')
         else:
             self.set_curr_state('EVE')
-        print(self.state())
 
     def register(self, update: Update, context: CallbackContext):
         super().register()
@@ -195,8 +231,7 @@ class PatientUser(BasicUser):
             'MOR': dt.datetime(1212, 12, 12, 14, 45, 0),
             'EVE': dt.datetime(1212, 12, 12, 14, 50, 0)
         }
-        # from db_api import
-        #
+
         self.save_updating(context)
 
         self.accept_times = add_patient(
@@ -224,6 +259,9 @@ class PatronageUser(BasicUser):
         # thread = Thread(target=self._threading_reg, args=(update, context))
         # thread.start()
         # thread.join()
+
+    def restore(self, context):
+        super().register()
 
     def _threading_reg(self, update: Update, context: CallbackContext):
         patronage = Patronage(chat_id=update.effective_chat.id)

@@ -240,7 +240,8 @@ class PatientRegistrationDialog(ConversationHandler):
 
         msg = context.bot.send_message(
             update.effective_chat.id, text=text, reply_markup=keyboard)
-        context.bot.pin_chat_message(update.effective_chat.id, msg.message_id)
+        update.effective_chat.unpin_all_messages()
+        update.effective_chat.pin_message(msg.message_id)
 
     @staticmethod
     def back_to_start(update: Update, context: CallbackContext):

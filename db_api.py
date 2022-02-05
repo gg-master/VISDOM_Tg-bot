@@ -16,9 +16,11 @@ db_sess = create_session()
 
 
 def add_accept_time(time, patient: Patient) -> int:
+    dbs = create_session()
     accept_time = AcceptTime(time=time, patient=patient)
-    db_sess.add(accept_time)
-    db_sess.commit()
+    dbs.add(accept_time)
+    dbs.commit()
+    dbs.close()
     return accept_time.id
 
 
@@ -31,11 +33,14 @@ def get_accept_time_by_patient(patient: Patient):
 
 
 def add_patient(time_morn, time_even, **kwargs: Any):
+    dbs = create_session()
     patient = Patient(**kwargs)
-    db_sess.add(patient)
-    db_sess.commit()
-    return {'MOR': add_accept_time(time_morn, patient),
-            'EVE': add_accept_time(time_even, patient)}
+    dbs.add(patient)
+    dbs.commit()
+    res = {'MOR': add_accept_time(time_morn, patient),
+           'EVE': add_accept_time(time_even, patient)}
+    dbs.close()
+    return res
 
 
 def get_patient_by_chat_id(chat_id: int) -> Patient:
@@ -44,12 +49,16 @@ def get_patient_by_chat_id(chat_id: int) -> Patient:
     dbs.close()
     return res
 
+
 def get_patient_by_user_code(user_code: str) -> Patient:
     return db_sess.query(Patient).filter(Patient.user_code == user_code).first()
 
 
 def get_all_patients() -> list:
-    return db_sess.query(Patient).all()
+    dbc = create_session()
+    res = dbc.query(Patient).all()
+    dbc.close()
+    return res
 
 
 def change_patients_time_zone(chat_id: int, time_zone: int) -> None:
@@ -75,10 +84,11 @@ def get_patronage_by_chat_id(chat_id: int) -> Patronage:
 
 
 def add_record(**kwargs: Any) -> None:
+    dbs = create_session()
     record = Record(**kwargs)
-    db_sess.add(record)
-    db_sess.commit()
-
+    dbs.add(record)
+    dbs.commit()
+    dbs.close()
 
 # def make_file_by_patient(patient):
 #     arr_sys_press, arr_dias_press, arr_heart_rate, arr_time, arr_time_zone, \

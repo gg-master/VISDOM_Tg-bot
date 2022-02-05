@@ -289,14 +289,14 @@ class DataCollectionDialog(ConversationHandler):
         user: PatientUser = context.user_data['user']
 
         # TODO запрос в бд для сохранения данных
-        add_record(
-            time=user.times[user.state()[0]].time(),
-            sys_press=user.data_response['sys'],
-            dias_press=user.data_response['dias'],
-            heart_rate=user.data_response['heart'],
-            time_zone=user.tz.zone,
-            accept_time_id=user.accept_times[user.state()[0]]
-        )
+        # add_record(
+        #     time=user.times[user.state()[0]].time(),
+        #     sys_press=user.data_response['sys'],
+        #     dias_press=user.data_response['dias'],
+        #     heart_rate=user.data_response['heart'],
+        #     time_zone=user.tz.zone,
+        #     accept_time_id=user.accept_times[user.state()[0]]
+        # )
         user.clear_responses()
 
         text = "Мы сохранили Ваш ответ. Спасибо!"

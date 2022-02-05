@@ -52,13 +52,13 @@ def daily_task(context: CallbackContext):
     if user.msg_to_del:
         context.bot.delete_message(user.chat_id,
                                    user.msg_to_del.message_id)
-        remove_job_if_exists(user.rep_task_name, context)
+    remove_job_if_exists(user.rep_task_name, context)
 
     # Создание диалога для сбора данных
     user.notification_states[data['name']][
         user.state()[1]].pre_start(context, data)
 
-    user.rep_task_name = f'{user.chat_id}-{user.msg_to_del.message_id}'
+    user.rep_task_name = f'{user.chat_id}-rep_task'
 
     # Создаем новую циклическую задачу
     context.job_queue.run_repeating(
@@ -77,9 +77,10 @@ def repeating_task(context: CallbackContext):
     job = context.job
     data = job.context
 
-    # Удаляем старое сообщение
-    context.bot.delete_message(data['user'].chat_id,
-                               data['user'].msg_to_del.message_id)
+    if data['user'].msg_to_del:
+        # Удаляем старое сообщение
+        context.bot.delete_message(data['user'].chat_id,
+                                   data['user'].msg_to_del.message_id)
 
     # Запускаем новое уведомление
     data['user'].notification_states[data['name']][
