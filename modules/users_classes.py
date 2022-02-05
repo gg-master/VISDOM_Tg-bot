@@ -17,6 +17,8 @@ from tools.tools import convert_tz
 from data.patronage import Patronage
 from data.patient import Patient
 
+from db_api import get_patient_by_chat_id, add_patient
+
 from pandas import DataFrame
 from data import db_session
 
@@ -56,8 +58,8 @@ class PatientUser(BasicUser):
 
         self.code = None
 
-        self.location = self.tz = None
-        self._times = self.default_times.copy()
+        self.location = self.tz = self.accept_times = None
+        self.times = self.default_times.copy()
         self.orig_loc = self.orig_t = None
 
         # Сообщения, которые отправляются пользователю при получении
@@ -76,23 +78,23 @@ class PatientUser(BasicUser):
         self.pill_response = None
         self.data_response = {'sys': None, 'dias': None, 'heart': None}
 
-    def times(self):
-        return dict(map(lambda x: (x, self._times[x].strftime("%H:%M")),
-                        self._times.keys()))
+    def str_times(self):
+        return dict(map(lambda x: (x, self.times[x].strftime("%H:%M")),
+                        self.times.keys()))
 
     def add_minutes(self, time, minutes):
         # Добавление минут
         delta = dt.timedelta(minutes=int(minutes))
-        self._times[time] += delta
+        self.times[time] += delta
         # Ограничение времени
-        if not (self.time_limiters[time][0] <= self._times[time]
+        if not (self.time_limiters[time][0] <= self.times[time]
                 <= self.time_limiters[time][1]):
-            self._times[time] -= delta
+            self.times[time] -= delta
             return False
         return True
 
     def create_notification(self, context: CallbackContext):
-        for name, notification_time in list(self._times.items())[:]:
+        for name, notification_time in list(self.times.items())[:]:
             create_daily_notification(
                 context=context,
                 time=self.tz.localize(notification_time),
@@ -120,43 +122,44 @@ class PatientUser(BasicUser):
 
     def next_curr_state_index(self):
         """Переключает индекс текущего состояния"""
-        self.curr_state[1] += 1
+        self.curr_state[1] = min(1, self.curr_state[1] + 1)
 
     def clear_responses(self):
         self.pill_response = None
         self.data_response = {'sys': None, 'dias': None, 'heart': None}
 
     def drop_notif_time(self):
-        if self._times == self.default_times:
+        if self.times == self.default_times:
             return False
-        self._times = self.default_times.copy()
+        self.times = self.default_times.copy()
         return True
 
     def cancel_updating(self):
         """Возвращение значений времени и ЧП к начальным значениям"""
-        self._times = self.orig_t.copy()
+        self.times = self.orig_t.copy()
         self.location = self.orig_loc
 
     def save_updating(self, context: CallbackContext):
         """Сохранение изменение настроект ЧП и времени уведомлений"""
         # TODO запрос в бд на изменение времени
         # TODO запрос на проверку времеи последней записи
-        if self._times != self.orig_t or self.location != self.orig_loc:
+        if self.times != self.orig_t or self.location != self.orig_loc:
             if self.location != self.orig_loc:
                 self.tz = pytz.timezone(convert_tz(self.location.get_coords(),
                                                    self.location.time_zone()))
                 self.orig_loc = self.location = Location(tz=-int(re.search(
                     pattern=r'[+-]?\d+', string=self.tz.zone).group(0)))
-            if self._times != self.orig_t:
-                self.orig_t = self._times.copy()
+            if self.times != self.orig_t:
+                self.orig_t = self.times.copy()
+
             self.recreate_notification(context)
 
     def is_msg_updated(self):
         return self.active_dialog_msg and \
                self.msg_to_del != self.active_dialog_msg
 
-    def restore(self, context: CallbackContext,
-                times: Dict[str, dt.time], tz_str: str):
+    def restore(self, context, times: Dict[str, dt.time],
+                tz_str: str, accept_times=None):
         # Конвертирование часового пояса из строки в объект
         self.tz = pytz.timezone(tz_str)
 
@@ -164,7 +167,7 @@ class PatientUser(BasicUser):
             pattern=r'[+-]?\d+', string=self.tz.zone).group(0)))
 
         # Преобразуем dt.time в dt.datetime
-        self._times = {k: self.default_times[k].replace(
+        self.times = {k: self.default_times[k].replace(
             hour=times[k].hour, minute=times[k].minute) for k in times.keys()}
 
         self.save_updating(context)
@@ -178,18 +181,31 @@ class PatientUser(BasicUser):
         thread.join()
 
     def _threading_reg(self, update: Update, context: CallbackContext):
-        # self.tz = pytz.timezone('Etc/GMT-3')
-        # self._times = {
-        #     'MOR': dt.time(19, 13, 0),
-        #     'EVE': dt.time(19, 14, 0)
-        # }
+        self.tz = pytz.timezone('Etc/GMT-3')
+        self.times = {
+            'MOR': dt.datetime(1212, 12, 12, 12, 19, 30),
+            'EVE': dt.datetime(1212, 12, 12, 12, 22, 0)
+        }
+        # from db_api import
+        #
         self.save_updating(context)
-        # TODO Регистрация в БД
 
-    @staticmethod
-    def get_patient_by_id(user_code):
-        return db_sess.query(Patient).filter(
-            Patient.user_code == user_code).first()
+        self.accept_times = add_patient(
+            time_morn=self.times['MOR'].time(),
+            time_even=self.times['EVE'].time(),
+            name=update.effective_user.full_name,
+            user_code=self.code,
+            time_zone=self.tz.zone,
+            chat_id=self.chat_id
+        )
+
+    def check_user(self):
+        patient = get_patient_by_chat_id(self.chat_id)
+        if patient:
+            if not patient.member:
+                return False
+            return None
+        return True
 
 
 class PatronageUser(BasicUser):

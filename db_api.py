@@ -15,18 +15,23 @@ def create_session():
 db_sess = create_session()
 
 
-def add_accept_time(time, patient: Patient) -> None:
+def add_accept_time(time, patient: Patient) -> int:
     accept_time = AcceptTime(time=time, patient=patient)
     db_sess.add(accept_time)
     db_sess.commit()
+    return accept_time.id
 
 
-def add_patient(time_morn, time_even, **kwargs: Any) -> None:
+def get_accept_time_by_patient(patient: Patient):
+    return db_sess.query(AcceptTime).filter(AcceptTime.patient_id == patient.id).all()
+
+
+def add_patient(time_morn, time_even, **kwargs: Any):
     patient = Patient(**kwargs)
     db_sess.add(patient)
     db_sess.commit()
-    add_accept_time(time_morn, patient)
-    add_accept_time(time_even, patient)
+    return {'MOR': add_accept_time(time_morn, patient),
+            'EVE': add_accept_time(time_even, patient)}
 
 
 def get_patient_by_chat_id(chat_id: int) -> Patient:
@@ -64,8 +69,9 @@ def get_patronage_by_chat_id(chat_id: int) -> Patronage:
     return db_sess.query(Patronage).filter(Patronage.chat_id == chat_id).first()
 
 
-def add_record(patient, **kwargs: Any) -> None:
+def add_record(**kwargs: Any) -> None:
     record = Record(**kwargs)
+    db_sess.add(record)
     db_sess.commit()
 
 

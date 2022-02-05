@@ -53,9 +53,9 @@ class SettingsDialog(ConversationHandler):
         text += f'\n\nВаши данные:' \
                 f'\nЧасовой пояс: {user.location}' \
                 f'\nВремя получения утреннего уведомления: ' \
-                f'{user.times()["MOR"]}\n' \
+                f'{user.str_times()["MOR"]}\n' \
                 f'Время получения вечернего уведомления: ' \
-                f'{user.times()["EVE"]}' \
+                f'{user.str_times()["EVE"]}' \
 
         buttons = [
             [
@@ -140,9 +140,9 @@ class SettingsConfNotifTimeDialog(ConfigureNotifTimeDialog):
     def start(update: Update, context: CallbackContext, *args):
         text = f'Настройте время получения напоминаний (время МЕСТНОЕ)\n\n' \
                f'Время получения утреннего уведомления: ' \
-               f'{context.user_data["user"].times()["MOR"]}\n' \
+               f'{context.user_data["user"].str_times()["MOR"]}\n' \
                f'Время получения вечернего уведомления: ' \
-               f'{context.user_data["user"].times()["EVE"]}'
+               f'{context.user_data["user"].str_times()["EVE"]}'
         return ConfigureNotifTimeDialog.start(update, context, text)
 
     @staticmethod

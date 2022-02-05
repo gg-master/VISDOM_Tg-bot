@@ -2,9 +2,9 @@ import logging
 
 from telegram import Update
 from telegram.ext import CommandHandler, Updater, MessageHandler, \
-    Filters, Defaults
+    Filters, Defaults, CallbackQueryHandler
 
-from modules.restore import Restore
+from modules.restore import Restore, patient_restore_handler
 from modules.start_dialogs import StartDialog, PatronageJob
 from modules.settings_dialogs import SettingsDialog
 from modules.notification_dailogs import PillTakingDialog, DataCollectionDialog
@@ -24,8 +24,10 @@ def unknown(update: Update, context: CallbackContext):
 def help_msg(update: Update, context: CallbackContext):
     from modules.users_classes import BasicUser, PatientUser, PatronageUser
     if not context.user_data.get('user'):
-        update.message.reply_text("Справка.\nЧтобы начать работу с ботом "
-                                  "введите /start.")
+        update.message.reply_text(
+            "Справка.\nЕсли Вы ранее не регистрировались, то чтобы начать "
+            "работу с ботом, введите: /start\n\n"
+            "Если Вы уже регистрировались, то восстановите доступ.")
     elif type(context.user_data.get('user')) is BasicUser:
         update.message.reply_text(
             "Справка.\nЧтобы получить больше возможностей зарегистрируйтесь.")
@@ -62,6 +64,9 @@ def main():
     dp.add_handler(SettingsDialog())
 
     dp.add_handler(PatronageJob())
+
+    dp.add_handler(CallbackQueryHandler(patient_restore_handler,
+                                        pattern='^RESTORE_PATIENT$'))
 
     dp.add_handler(CommandHandler("help", help_msg))
     dp.add_handler(MessageHandler(Filters.regex('^Справка$'), help_msg))

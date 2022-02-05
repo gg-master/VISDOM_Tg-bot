@@ -1,6 +1,5 @@
 from telegram import Update
 from telegram.ext import CallbackContext
-from modules.users_classes import PatronageUser, PatientUser
 
 
 def not_registered_users(func):
@@ -15,6 +14,7 @@ def not_registered_users(func):
 
 def registered_patient(func):
     def decorated_func(update: Update, context: CallbackContext):
+        from modules.users_classes import PatientUser
         user = context.user_data.get('user')
         if type(user) is PatientUser:
             return func(update, context)
@@ -37,6 +37,7 @@ def just_for_registered_msg(update: Update, context: CallbackContext):
 
 def registered_patronages(func):
     def decorator(update: Update, context: CallbackContext):
+        from modules.users_classes import PatronageUser
         user = context.user_data.get('user')
         if type(user) is PatronageUser and user.registered():
             return func(update, context)

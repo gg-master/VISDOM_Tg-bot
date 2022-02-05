@@ -4,8 +4,9 @@ from telegram.ext import ConversationHandler, CallbackQueryHandler, \
     DispatcherHandlerStop
 
 from modules.timer import remove_job_if_exists
-
+from tools.decorators import registered_patient
 from modules.dialogs_shortcuts.notification_shortcuts import *
+from db_api import add_record
 
 
 class PillTakingDialog(ConversationHandler):
@@ -54,6 +55,7 @@ class PillTakingDialog(ConversationHandler):
         user.msg_to_del = msg
 
     @staticmethod
+    @registered_patient
     def start(update: Update, context: CallbackContext):
         user = context.user_data['user']
         response = user.pill_response
@@ -194,6 +196,7 @@ class DataCollectionDialog(ConversationHandler):
         PillTakingDialog.pre_start(context, data, text=text, buttons=buttons)
 
     @staticmethod
+    @registered_patient
     def start(update: Update, context: CallbackContext):
         user = context.user_data['user']
         response = user.data_response
@@ -280,8 +283,19 @@ class DataCollectionDialog(ConversationHandler):
 
     @staticmethod
     def end(update: Update, context: CallbackContext):
+        from modules.users_classes import PatientUser
         print(context.user_data['user'].data_response)
         # TODO запрос в бд для сохранения данных
+        user: PatientUser = context.user_data['user']
+        add_record(
+            time=user.times[user.state()[0]].time(),
+            sys_press=user.data_response['sys'],
+            dias_press=user.data_response['dias'],
+            heart_rate=user.data_response['heart'],
+            time_zone=user.tz.zone,
+            accept_time_id=user.accept_times[user.state()[0]]
+        )
+
         text = "Мы сохранили Ваш ответ. Спасибо!"
 
         update.callback_query.answer()

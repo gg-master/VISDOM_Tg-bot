@@ -7,8 +7,10 @@ from telegram.ext import (
 
 from modules.patronage_dialogs import PatronageJob
 from modules.users_classes import BasicUser, PatientUser, PatronageUser
-from tools.prepared_answers import START_MSG
 from modules.dialogs_shortcuts.start_shortcuts import *
+from modules.restore import Restore
+
+from tools.prepared_answers import START_MSG
 from tools.decorators import not_registered_users
 from tools.tools import get_from_env
 
@@ -87,7 +89,8 @@ class PatientRegistrationDialog(ConversationHandler):
         super().__init__(
             name=self.__class__.__name__,
             entry_points=[CallbackQueryHandler(
-                self.start, pattern=f'^{SIGN_UP_AS_PATIENT}$')],
+                self.pre_start, pattern=f'^{SIGN_UP_AS_PATIENT}$',
+                run_async=False)],
             states={
                 PATIENT_REGISTRATION_ACTION: [
                     ConfigureTZDialog(),
@@ -114,10 +117,17 @@ class PatientRegistrationDialog(ConversationHandler):
         )
 
     @staticmethod
-    def start(update: Update, context: CallbackContext):
+    def pre_start(update: Update, context: CallbackContext):
         if type(context.user_data['user']) is BasicUser:
             context.user_data['user'] = PatientUser(update.effective_chat.id)
+        res = context.user_data['user'].check_user()
+        if not res:
+            return PatientRegistrationDialog.cant_registered(
+                update, context, res)
+        return PatientRegistrationDialog.start(update, context)
 
+    @staticmethod
+    def start(update: Update, context: CallbackContext):
         location = context.user_data['user'].location
         code = context.user_data['user'].code
         if location and code:
@@ -176,11 +186,11 @@ class PatientRegistrationDialog(ConversationHandler):
     def end_reg(update: Update, context: CallbackContext):
         text = f"Поздравляем, вы зарегистрированы в системе!\n\n" \
                f"Теперь каждый день в " \
-               f"{context.user_data['user'].times()['MOR']} " \
+               f"{context.user_data['user'].str_times()['MOR']} " \
                f"чат-бот напомнит Вам принять " \
                f"лекарство, а также измерить и сообщить артериальное " \
                f"давление и частоту сердечных сокращений. \n\n" \
-               f"В {context.user_data['user'].times()['EVE']} " \
+               f"В {context.user_data['user'].str_times()['EVE']} " \
                f"напомнит о необходимости измерить и сообщить " \
                f"артериальное давление и частоту сердечных сокращений еще раз"
 
@@ -201,14 +211,27 @@ class PatientRegistrationDialog(ConversationHandler):
         return STOPPING
 
     @staticmethod
+    def cant_registered(update: Update, context: CallbackContext, res):
+        if res is not None:
+            text = 'Вы были исключены из исследования и не можете ' \
+                   'повторно зарегистрироваться.'
+            update.effective_chat.send_message(text)
+            return STOPPING
+        update.callback_query.delete_message()
+        text = 'Вы не можете повторно зарегистрироваться.\n'
+        update.effective_chat.send_message(text)
+        Restore.restore_msg(context, chat_id=update.effective_chat.id)
+        return STOPPING
+
+    @staticmethod
     def restore_main_msg(update: Update, context: CallbackContext):
         text = f"Поздравляем, вы зарегистрированы в системе!\n\n" \
                f"Теперь каждый день в " \
-               f"{context.user_data['user'].times()['MOR']} " \
+               f"{context.user_data['user'].str_times()['MOR']} " \
                f"чат-бот напомнит Вам принять " \
                f"лекарство, а также измерить и сообщить артериальное " \
                f"давление и частоту сердечных сокращений. \n\n" \
-               f"В {context.user_data['user'].times()['EVE']} " \
+               f"В {context.user_data['user'].str_times()['EVE']} " \
                f"напомнит о необходимости измерить и сообщить " \
                f"артериальное давление и частоту сердечных сокращений еще раз"
 
@@ -366,9 +389,9 @@ class ConfigureNotifTimeDialog(ConversationHandler):
                f'завершите регистрацию, нажав кнопку \n' \
                f'"Завершить регистрацию" \n\n' \
                f'Время получения утреннего уведомления: ' \
-               f'{context.user_data["user"].times()["MOR"]}\n' \
+               f'{context.user_data["user"].str_times()["MOR"]}\n' \
                f'Время получения вечернего уведомления: ' \
-               f'{context.user_data["user"].times()["EVE"]}' \
+               f'{context.user_data["user"].str_times()["EVE"]}' \
             if not t else t
 
         buttons = [
@@ -399,7 +422,7 @@ class ConfigureNotifTimeDialog(ConversationHandler):
             text = f'Изменение времени получения утренних уведомлений.\n'
         else:
             text = f'Изменение времени получения вечерних уведомлений.\n'
-        text += f'Время: {context.user_data["user"].times()[tm]}'
+        text += f'Время: {context.user_data["user"].str_times()[tm]}'
 
         keyboard = InlineKeyboardMarkup(ConfigureNotifTimeDialog.buttons)
 
@@ -422,10 +445,10 @@ class ConfigureNotifTimeDialog(ConversationHandler):
             return TIME_CHANGE
 
         if not res:
-            text += f'Крайне время: {context.user_data["user"].times()[tm]}'
+            text += f'Крайне время: {context.user_data["user"].str_times()[tm]}'
             context.user_data['lim'] = True
         else:
-            text += f'Время: {context.user_data["user"].times()[tm]}'
+            text += f'Время: {context.user_data["user"].str_times()[tm]}'
             context.user_data['lim'] = False
 
         keyboard = InlineKeyboardMarkup(ConfigureNotifTimeDialog.buttons)
