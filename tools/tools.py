@@ -23,13 +23,14 @@ def get_from_env(item):
 
 def convert_tz(coords=None, tz_offset=None) -> str:
     import pytz
-    from tzwhere import tzwhere
+    import timezonefinder
     from datetime import datetime, timedelta
 
     now = datetime.now(pytz.utc)
     if coords and not tz_offset:
-        tz = tzwhere.tzwhere(forceTZ=True)
-        timezone = pytz.timezone(tz.tzNameAt(*coords, forceTZ=True))
+        lat, lon = coords
+        tf = timezonefinder.TimezoneFinder()
+        timezone = pytz.timezone(tf.certain_timezone_at(lat=lat, lng=lon))
         all_tz = list(
             {tz.zone for tz in map(pytz.timezone, pytz.all_timezones_set)
              if now.astimezone(tz).utcoffset() == now.astimezone(
