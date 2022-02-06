@@ -35,11 +35,6 @@ END = ConversationHandler.END
 ) = map(chr, range(11, 13))
 
 (
-    # State definitions for specialist (CC1) registration conversation
-    PATRONAGE_REGISTRATION_ACTION,
-) = map(chr, range(13, 14))
-
-(
     # Other states
     STOPPING,
     # Other constants
@@ -48,19 +43,11 @@ END = ConversationHandler.END
     REGISTRATION_OVER,
     CONF_TZ_OVER,
     FINISH_REGISTRATION,
-) = map(chr, range(14, 20))
+) = map(chr, range(13, 19))
 
 
 (
-    RECEIVE_TOKEN,
+    PATRONAGE_REGISTRATION_ACTION,
     TYPING_TOKEN,
-    DEFAULT_JOB,
-    SOMETHING,
-    MESSAGE_HANDLER,
     SEND_USER_DATA_PAT,
-    PATRONAGE_ACTION,
-    ENTER_TOKEN
-) = map(chr, range(20, 28))
-
-PATRONAGE_JOB = 'PATRONAGE_JOB'
-
+) = map(chr, range(19, 22))

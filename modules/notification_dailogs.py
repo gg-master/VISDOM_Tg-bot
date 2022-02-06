@@ -1,17 +1,21 @@
+import datetime as dt
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ConversationHandler, CallbackQueryHandler, \
     CallbackContext, CommandHandler, MessageHandler, Filters, \
     DispatcherHandlerStop
 
 from modules.timer import remove_job_if_exists
-
+from tools.decorators import registered_patient
 from modules.dialogs_shortcuts.notification_shortcuts import *
+from db_api import add_record
 
 
 class PillTakingDialog(ConversationHandler):
     def __init__(self):
         super().__init__(
             name=self.__class__.__name__,
+            conversation_timeout=dt.timedelta(hours=1, minutes=30),
             entry_points=[CallbackQueryHandler(self.start,
                                                pattern=f'^{PILL_TAKING}$')],
             states={
@@ -20,7 +24,7 @@ class PillTakingDialog(ConversationHandler):
                                          pattern=f'^{CONFIRM_PILL_TAKING}$'),
                     CallbackQueryHandler(self.reason,
                                          pattern=f'^{CANT_PILL_TAKING}$'),
-                    CallbackQueryHandler(self.end, pattern=f'^{END}$')
+                    CallbackQueryHandler(self.end, pattern='END_PILL_TAKING')
                 ],
                 TYPING: [
                     MessageHandler(Filters.text & ~Filters.command,
@@ -48,12 +52,12 @@ class PillTakingDialog(ConversationHandler):
         msg = context.bot.send_message(data['user'].chat_id,
                                        text=text,
                                        reply_markup=keyboard)
-
         user = context.job.context['user'] if context.job \
             else context.user_data['user']
         user.msg_to_del = msg
 
     @staticmethod
+    @registered_patient
     def start(update: Update, context: CallbackContext):
         user = context.user_data['user']
         response = user.pill_response
@@ -69,7 +73,8 @@ class PillTakingDialog(ConversationHandler):
                    f'\n\nВаш ответ: {response}'
 
         buttons = [
-            [InlineKeyboardButton(text='Подтвердить', callback_data=f'{END}')]
+            [InlineKeyboardButton(text='Подтвердить',
+                                  callback_data='END_PILL_TAKING')]
             if response else '',
             [InlineKeyboardButton(text='Я принял лекарство',
                                   callback_data=f'{CONFIRM_PILL_TAKING}')]
@@ -92,7 +97,9 @@ class PillTakingDialog(ConversationHandler):
                 return END
 
             # Удаляем pre-start сообщение перед началом диалога
-            context.bot.delete_message(user.chat_id, user.msg_to_del.message_id)
+            if not user.active_dialog_msg:
+                context.bot.delete_message(user.chat_id,
+                                           user.msg_to_del.message_id)
 
             # Отправляем новое сообщение
             msg = context.bot.send_message(
@@ -158,13 +165,16 @@ class DataCollectionDialog(ConversationHandler):
     def __init__(self):
         super().__init__(
             name=self.__class__.__name__,
+            conversation_timeout=dt.timedelta(
+                # hours=1,
+                minutes=2),
             entry_points=[CallbackQueryHandler(self.start,
                                                pattern=f'^{DATA_COLLECT}$')],
             states={
                 DATA_COLLECT_ACTION: [
                     CallbackQueryHandler(self.input_req,
                                          pattern=f'^SYS$|^DIAS$|^HEART$'),
-                    CallbackQueryHandler(self.end, pattern=f'^{END}$')
+                    CallbackQueryHandler(self.end, pattern=f'END_DATA_COLLECT')
                 ],
                 TYPING: [
                     MessageHandler(Filters.text & ~Filters.command,
@@ -192,6 +202,7 @@ class DataCollectionDialog(ConversationHandler):
         PillTakingDialog.pre_start(context, data, text=text, buttons=buttons)
 
     @staticmethod
+    @registered_patient
     def start(update: Update, context: CallbackContext):
         user = context.user_data['user']
         response = user.data_response
@@ -209,15 +220,15 @@ class DataCollectionDialog(ConversationHandler):
 
         sys, dias, heart = response.values()
         if any(response.values()):
-            text += f'\nВаши данные:' \
-                    f'\n{("САД: " + str(sys)) if sys else ""}' \
-                    f'\n{("ДАД: " + str(dias)) if dias else ""}' \
-                    f'\n{("ЧСС: " + str(heart)) if heart else ""}'
+            text += f'\nВаши данные:'
+            text += ("\nСАД: " + str(sys)) if sys else ''
+            text += ("\nДАД: " + str(dias)) if sys else ''
+            text += ("\nЧСС: " + str(heart)) if sys else ''
 
         keyboard = InlineKeyboardMarkup(
             [
                 [InlineKeyboardButton(text='Подтвердить',
-                                      callback_data=f'{END}')]
+                                      callback_data=f'END_DATA_COLLECT')]
                 if all(response.values()) else '',
                 [InlineKeyboardButton(text='Ввести САД'
                  if not sys else 'Изменить САД', callback_data=f'SYS'),
@@ -238,7 +249,9 @@ class DataCollectionDialog(ConversationHandler):
                 user.active_dialog_msg = None
                 return END
             # Удаляем pre-start сообщение перед началом диалога
-            context.bot.delete_message(user.chat_id, user.msg_to_del.message_id)
+            if not user.active_dialog_msg:
+                context.bot.delete_message(user.chat_id,
+                                           user.msg_to_del.message_id)
             # Отправляем новое сообщение
             msg = context.bot.send_message(
                 user.chat_id, text=text, reply_markup=keyboard)
@@ -276,8 +289,21 @@ class DataCollectionDialog(ConversationHandler):
 
     @staticmethod
     def end(update: Update, context: CallbackContext):
+        from modules.users_classes import PatientUser
         print(context.user_data['user'].data_response)
-        # TODO запрос в бд для сохранения данных
+        user: PatientUser = context.user_data['user']
+
+        add_record(
+            # time=dt.datetime.now(user.tz).time(),
+            time=user.times[user.state()[0]].time(),
+            sys_press=user.data_response['sys'],
+            dias_press=user.data_response['dias'],
+            heart_rate=user.data_response['heart'],
+            time_zone=user.tz.zone,
+            accept_time_id=user.accept_times[user.state()[0]]
+        )
+        user.clear_responses()
+
         text = "Мы сохранили Ваш ответ. Спасибо!"
 
         update.callback_query.answer()

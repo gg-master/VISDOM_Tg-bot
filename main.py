@@ -1,11 +1,11 @@
 import logging
 
 from telegram import Update
-from telegram.ext import (
-    CommandHandler, Updater, MessageHandler, Filters, Defaults
-)
+from telegram.ext import CommandHandler, Updater, MessageHandler, \
+    Filters, Defaults, CallbackQueryHandler
 
-from modules.restore import Restore
+from modules.restore import Restore, patient_restore_handler, \
+    patronage_restore_handler
 from modules.start_dialogs import StartDialog, PatronageJob
 from modules.settings_dialogs import SettingsDialog
 from modules.notification_dailogs import PillTakingDialog, DataCollectionDialog
@@ -23,20 +23,32 @@ def unknown(update: Update, context: CallbackContext):
 
 
 def help_msg(update: Update, context: CallbackContext):
-    update.message.reply_text("Справка")
+    from modules.users_classes import BasicUser, PatientUser, PatronageUser
+    if not context.user_data.get('user'):
+        update.message.reply_text(
+            "Справка.\nЕсли Вы ранее не регистрировались, то чтобы начать "
+            "работу с ботом, введите: /start\n\n"
+            "Если Вы уже регистрировались, то восстановите доступ.")
+    elif type(context.user_data.get('user')) is BasicUser:
+        update.message.reply_text(
+            "Справка.\nЧтобы получить больше возможностей зарегистрируйтесь.")
+    elif type(context.user_data.get('user')) is PatientUser:
+        update.message.reply_text("Справка. Команды Для пациента.")
+    elif type(context.user_data.get('user')) is PatronageUser:
+        update.message.reply_text("Справка. Команды для патронажа.")
 
 
 def echo(update: Update, context: CallbackContext):
-    date: dt.datetime = update.message.date
+    date = update.message.date
     print(date, end=' - ')
     print(date.hour, date.tzinfo)
     print(update.message.location)
-    print(update.message.chat_id, '-', update.effective_user.id, '-', update.effective_chat.id)
+    print(update.message.chat_id, '-', update.effective_user.id, '-',
+          update.effective_chat.id)
     update.message.reply_text(update.message.text)
 
 
 def main():
-    # chat_id = 721698752
     updater = Updater(get_from_env('TOKEN'),
                       use_context=True, defaults=Defaults(run_async=True))
 
@@ -53,6 +65,11 @@ def main():
     dp.add_handler(SettingsDialog())
 
     dp.add_handler(PatronageJob())
+
+    dp.add_handler(CallbackQueryHandler(patient_restore_handler,
+                                        pattern='^RESTORE_PATIENT$'))
+    dp.add_handler(CallbackQueryHandler(patronage_restore_handler,
+                                        pattern='^RESTORE_PATRONAGE$'))
 
     dp.add_handler(CommandHandler("help", help_msg))
     dp.add_handler(MessageHandler(Filters.regex('^Справка$'), help_msg))
