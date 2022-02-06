@@ -16,6 +16,8 @@ from tools.tools import convert_tz
 
 from data.patronage import Patronage
 from data.patient import Patient
+from data.accept_time import AcceptTime
+from data.record import Record
 
 from pandas import DataFrame
 from data import db_session
@@ -182,9 +184,10 @@ class PatronageUser(BasicUser):
         thread.join()
 
     def _threading_reg(self, update: Update, context: CallbackContext):
-        patronage = Patronage(chat_id=update.effective_chat.id)
-        db_sess.add(patronage)
-        db_sess.commit()
+        with db_session.create_session() as db_sess:
+            patronage = Patronage(chat_id=update.effective_chat.id)
+            db_sess.add(patronage)
+            db_sess.commit()
 
     @staticmethod
     def make_file_by_patient(patient):
@@ -207,21 +210,22 @@ class PatronageUser(BasicUser):
     @staticmethod
     def make_file_patients():
         arr_sys_press, arr_dias_press, arr_heart_rate, arr_time, arr_time_zone, \
-        patient_user_code = [], [], [], [], [], []
-        patients = db_sess.query(Patient).all()
-        for patient in patients:
-            for accept_time in patient.accept_time:
-                for record in accept_time.record:
-                    patient_user_code.append(patient.id)
-                    arr_sys_press.append(record.sys_press)
-                    arr_dias_press.append(record.dias_press)
-                    arr_heart_rate.append(record.heart_rate)
-                    arr_time.append(record.time)
-                    arr_time_zone.append(record.time_zone)
-        df = DataFrame({'Код пациента': patient_user_code,
-                        'Систолическое давление': arr_sys_press,
-                        'Диастолическое давление': arr_dias_press,
-                        'Частота сердечных сокращений': arr_heart_rate,
-                        'Время приема таблеток и измерений': arr_time,
-                        'Часовой пояс': arr_time_zone})
-        df.to_excel(f'static/statistics.xlsx')
+        arr_patient_user_code, arr_patient_id = [], [], [], [], [], [], []
+        records = db_sess.query(Patient, Record).join(Patient).join(AcceptTime).join(Record).all()
+        print(records)
+        # for record in records:
+        #     arr_patient_id.append(patient.id)
+        #     arr_patient_user_code.append(patient.user_code)
+        #     arr_sys_press.append(record.sys_press)
+        #     arr_dias_press.append(record.dias_press)
+        #     arr_heart_rate.append(record.heart_rate)
+        #     arr_time.append(record.time)
+        #     arr_time_zone.append(record.time_zone)
+        # df = DataFrame({'ID пациента': arr_patient_id,
+        #                 'Код пациента': arr_patient_user_code,
+        #                 'Систолическое давление': arr_sys_press,
+        #                 'Диастолическое давление': arr_dias_press,
+        #                 'Частота сердечных сокращений': arr_heart_rate,
+        #                 'Время приема таблеток и измерений': arr_time,
+        #                 'Часовой пояс': arr_time_zone})
+        # df.to_excel(f'static/statistics.xlsx')

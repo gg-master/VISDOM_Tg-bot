@@ -9,8 +9,8 @@ class AcceptTime(SqlAlchemyBase):
     id = sqlalchemy.Column(sqlalchemy.Integer, autoincrement=True,
                            primary_key=True)
     patient_id = sqlalchemy.Column(sqlalchemy.Integer,
-                                   sqlalchemy.ForeignKey('patient.id'))
-    time = sqlalchemy.Column(sqlalchemy.Time)
-    record = orm.relation('Record', back_populates='accept_time')
+                                   sqlalchemy.ForeignKey('patient.id', ondelete='CASCADE'))
+    time = sqlalchemy.Column(sqlalchemy.DateTime)
+    record = orm.relationship('Record', back_populates='accept_time', passive_deletes='all')
     patient = orm.relation('Patient')
 

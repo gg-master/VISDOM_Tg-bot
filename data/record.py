@@ -13,8 +13,10 @@ class Record(SqlAlchemyBase):
     dias_press = sqlalchemy.Column(sqlalchemy.Integer)
     heart_rate = sqlalchemy.Column(sqlalchemy.Integer)
     time_zone = sqlalchemy.Column(sqlalchemy.String(45))
+    response_time = sqlalchemy.Column(sqlalchemy.DateTime)
+    comment = sqlalchemy.Column(sqlalchemy.String(100))
     accept_time_id = sqlalchemy.Column(sqlalchemy.Integer,
-                                    sqlalchemy.ForeignKey('accept_time.id'))
+                                    sqlalchemy.ForeignKey('accept_time.id', ondelete='CASCADE'))
     accept_time = orm.relation('AcceptTime')
 
 

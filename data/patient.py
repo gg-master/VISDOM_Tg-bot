@@ -14,7 +14,7 @@ class Patient(SqlAlchemyBase):
     time_zone = sqlalchemy.Column(sqlalchemy.String(45))
     chat_id = sqlalchemy.Column(sqlalchemy.Integer, unique=True)
     member = sqlalchemy.Column(sqlalchemy.Boolean, default=True)
-    accept_time = orm.relation('AcceptTime', back_populates='patient')
+    accept_time = orm.relation('AcceptTime', back_populates='patient', passive_deletes='all')
     patronage = orm.relationship("Patronage",
                                  secondary="patients_has_patronage",
                                  back_populates="patient")

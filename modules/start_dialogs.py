@@ -416,7 +416,7 @@ class PatronageRegistrationDialog(ConversationHandler):
                                      pattern=f'^{END}$')
             ],
             map_to_parent={
-                STOPPING: END,
+                END: END,
             }
         )
 
@@ -475,7 +475,7 @@ class PatronageJob(ConversationHandler):
                 ]},
 
             fallbacks=[
-                CommandHandler('stop', StartDialog.stop_nested,
+                CommandHandler('stop', self.stop,
                                run_async=False),
                 CallbackQueryHandler(PatientRegistrationDialog.back_to_start,
                                      pattern=f'^{END}$')
@@ -484,6 +484,9 @@ class PatronageJob(ConversationHandler):
                 STOPPING: END,
             }
         )
+
+    def stop(self):
+        return END
 
     @staticmethod
     def default_job(update: Update, context: CallbackContext):
