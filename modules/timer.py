@@ -16,17 +16,14 @@ def remove_job_if_exists(name, context: CallbackContext):
 
 
 def create_daily_notification(context: CallbackContext, **kwargs):
-    """Добавляем задачу в очередь"""
+    """Создаем уведомление которое будет срабатывать ежедневно"""
     chat_id = kwargs['user'].chat_id
     try:
-        # Добавляем задачу в очередь
-
         # Удаляем старую задачу с таким же именем
         remove_job_if_exists(f'{chat_id}-{kwargs["name"]}', context)
 
-        job = context.job_queue.run_daily(
+        context.job_queue.run_daily(
             callback=daily_task,
-            # when=5,
             time=kwargs['time'],
             context=kwargs,
             name=f'{chat_id}-{kwargs["name"]}'
@@ -38,7 +35,6 @@ def create_daily_notification(context: CallbackContext, **kwargs):
 
 
 def daily_task(context: CallbackContext):
-    # TODO запрос на проверку даты последней записи
     """Таски, которые выполняются ежедневно утром и вечером"""
     job = context.job
     data = job.context
@@ -51,32 +47,31 @@ def daily_task(context: CallbackContext):
     # Стираем старые ответы пользователя
     user.clear_responses()
 
-    # Если пользователь не ответил на предыдущее сообщение, то удаляем его
+    # Если пользователь не ответил на предыдущее сообщение (уведомление),
+    # то удаляем его
     if user.msg_to_del:
         context.bot.delete_message(user.chat_id,
                                    user.msg_to_del.message_id)
-    remove_job_if_exists(user.rep_task_name, context)
+    remove_job_if_exists(f'{user.chat_id}-rep_task', context)
 
-    # Создание диалога для сбора данных
-    user.notification_states[data['name']][
-        user.state()[1]].pre_start(context, data)
+    # Если с момента последней записи прошло более 24 часов, то устанавливаем
 
-    user.rep_task_name = f'{user.chat_id}-rep_task'
+    if not user.check_last_record_by_name(data['name'])[0]:
+        # Создание диалога для сбора данных
+        user.notification_states[data['name']][
+            user.state()[1]].pre_start(context, data)
 
-    # Создаем новую циклическую задачу
-    context.job_queue.run_repeating(
-        callback=repeating_task,
-        # interval=20,
-        # last=dt.datetime.now(pytz.utc) + dt.timedelta(seconds=20*4),
-        interval=data['task_data']['interval'],
-        last=data['task_data']['last'],
-        context=data,
-        name=user.rep_task_name
-    )
+        # Создаем новую циклическую задачу
+        context.job_queue.run_repeating(
+            callback=repeating_task,
+            interval=data['task_data']['interval'],
+            last=data['task_data']['last'],
+            context=data,
+            name=f'{user.chat_id}-rep_task'
+        )
 
 
 def repeating_task(context: CallbackContext):
-    # TODO запрос на проверку даты последней записи
     job = context.job
     data = job.context
 
@@ -94,6 +89,7 @@ def deleting_pre_start_msg_task(context):
     job = context.job
     data = job.context
     try:
-        context.bot.delete_message(data['chat_id'], data['msg_id'])
+        user = data['user']
+        context.bot.delete_message(user.chat_id, data['msg_id'])
     except Exception as e:
-        pass
+        remove_job_if_exists(f'{data["chat_id"]}-pre_start_msg', context)

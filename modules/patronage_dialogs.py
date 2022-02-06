@@ -5,7 +5,8 @@ from telegram.ext import ConversationHandler, MessageHandler, Filters, \
 from modules.dialogs_shortcuts.start_shortcuts import SEND_USER_DATA_PAT, END
 from modules.users_classes import PatientUser, PatronageUser
 from tools.decorators import registered_patronages
-from db_api import get_patient_by_chat_id
+from db_api import get_patient_by_chat_id, get_patient_by_user_code, \
+    make_file_by_patient_user_code
 
 
 class PatronageJob(ConversationHandler):
@@ -53,19 +54,19 @@ class PatronageJob(ConversationHandler):
     @registered_patronages
     def send_user_data(update: Update, context: CallbackContext):
         user_code = update.message.text
-        try:
-            patient = get_patient_by_chat_id(int(user_code))
-            if patient:
-                PatronageUser.make_file_by_patient(patient)
-                update.effective_chat.send_document(
-                    open(f'static/{patient.user_code}.xlsx', 'rb'))
-            else:
-                update.message.reply_text('Пациента с таким кодом не существует')
-        except Exception as e:
-            print(e)
+        # try:
+        patient = get_patient_by_user_code(user_code)
+        if patient:
+            make_file_by_patient_user_code(user_code)
+            update.effective_chat.send_document(
+                open(f'static/{patient.user_code}.xlsx', 'rb'))
+        else:
             update.message.reply_text('Пациента с таким кодом не существует')
-        finally:
-            return END
+        # except Exception as e:
+        #     print(e)
+        #     update.message.reply_text('Пациента с таким кодом не существует')
+        # finally:
+        #     return END
 
     @staticmethod
     @registered_patronages

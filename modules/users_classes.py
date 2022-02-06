@@ -4,26 +4,23 @@ import pytz
 import logging
 import datetime as dt
 from threading import Thread
-from typing import Dict
+from typing import Dict, Tuple
 
 from telegram import Update
 from telegram.ext import CallbackContext
 
-from data.record import Record
 from modules.location import Location
 from modules.notification_dailogs import PillTakingDialog, DataCollectionDialog
 from modules.timer import create_daily_notification, remove_job_if_exists, \
     repeating_task
 from tools.tools import convert_tz
 
-from data.patronage import Patronage
 from data.patient import Patient
-from data.accept_time import AcceptTime
 from data.record import Record
 
 from db_api import get_patient_by_chat_id, add_patient, change_accept_time, \
     change_patients_time_zone, get_last_record_by_accept_time, add_patronage, \
-    get_patronage_by_chat_id
+    get_patronage_by_chat_id, add_record
 
 from pandas import DataFrame
 from data import db_session
@@ -71,7 +68,6 @@ class PatientUser(BasicUser):
         # уведомлений. Сохраняем их для функции удаления старых сообщений
         # при обновлении уведомления.
         self.msg_to_del = self.active_dialog_msg = None
-        self.rep_task_name = None
 
         self.notification_states = {
             'MOR': [PillTakingDialog, DataCollectionDialog],
@@ -99,6 +95,8 @@ class PatientUser(BasicUser):
         return True
 
     def create_notification(self, context: CallbackContext):
+        """Создание уведомлений при регистрации или
+        после изменения времени в настройках"""
         for name, notification_time in list(self.times.items())[:]:
             create_daily_notification(
                 context=context,
@@ -106,46 +104,53 @@ class PatientUser(BasicUser):
                 name=name,
                 user=self,
                 task_data={
-                    'interval': dt.timedelta(hours=1) if name == 'MOR'
+                    'interval': dt.timedelta(
+                        hours=1,
+                        # minutes=2
+                    ) if name == 'MOR'
                     else dt.timedelta(minutes=30),
-                    'last': self.tz.localize(
-                        self.time_limiters[name][1]).time()},
+                    'last': self.tz.localize(self.time_limiters[name][1]
+                                             ).astimezone(pytz.utc).time()
+                },
             )
 
     def recreate_notification(self, context: CallbackContext):
-        remove_job_if_exists(self.rep_task_name, context)
+        remove_job_if_exists(f'{self.chat_id}-rep_task', context)
         self.create_notification(context)
 
     def restore_repeating_task(self, context: CallbackContext):
         """Восстановление повторяющихся сообщений"""
         state_name = self.state()[0]
-        now = dt.datetime.now(tz=self.tz).time()
+
+        if self.check_last_record_by_name(state_name)[0]:
+            return None
 
         # Проверяем время в которое произошел рестарт.
         # Если рестар был между лимитами определенного уведомления, то
         # восстанавливаем репитер, чтобы отправить уведомление
-        first = self.tz.localize(self.times[state_name]).time()
-        last = self.tz.localize(self.time_limiters[state_name][1]).time()
-        if now < first or now > last:
+        now = dt.datetime.now(tz=self.tz).time()
+        first = self.tz.localize(self.times[state_name])
+        last = self.tz.localize(self.time_limiters[state_name][1])
+
+        if now < first.time() or now > last.time():
             return None
-        print(first, last, now, state_name)
-        self.rep_task_name = f'{self.chat_id}-rep_task'
-        job = context.job_queue.run_repeating(
+
+        interval = dt.timedelta(hours=1) if state_name == 'MOR' \
+            else dt.timedelta(minutes=30)
+
+        f = dt.timedelta(hours=first.hour, minutes=first.minute)
+        n = dt.timedelta(hours=now.hour, minutes=now.minute)
+
+        first = first + interval * (abs(f - n) // interval + 1)
+
+        context.job_queue.run_repeating(
             callback=repeating_task,
-            # interval=5,
-            # last=dt.datetime.now(pytz.utc) + dt.timedelta(seconds=20*4),
-            interval=dt.timedelta(hours=1) if state_name == 'MOR' \
-            else dt.timedelta(minutes=30),
-            first=first, last=last,
+            interval=interval,
+            first=first,
+            last=last.astimezone(pytz.utc).time(),
             context={'user': self, 'name': state_name},
-            name=self.rep_task_name
+            name=f'{self.chat_id}-rep_task'
         )
-        try:
-            # Если время следующего запуска не определено, то удаляем.
-            if not job.next_t:
-                remove_job_if_exists(self.rep_task_name, context)
-        except AttributeError as e:
-            pass
 
     def state(self):
         """Возвращает имя временного таймера и состояние
@@ -155,6 +160,15 @@ class PatientUser(BasicUser):
     def set_curr_state(self, name):
         """Устанавливает новое состояние"""
         self.curr_state = [name, 0]
+
+    def _set_curr_state_by_time(self):
+        # Устанавливаем состояние диалога исходя из текущего времени
+        if self.tz.localize(self.times['MOR']).time() < \
+                dt.datetime.now(tz=self.tz).time() < \
+                self.tz.localize(self.times['EVE']).time():
+            self.set_curr_state('MOR')
+        else:
+            self.set_curr_state('EVE')
 
     def next_curr_state_index(self):
         """Переключает индекс текущего состояния"""
@@ -169,6 +183,7 @@ class PatientUser(BasicUser):
                self.msg_to_del != self.active_dialog_msg
 
     def drop_notif_time(self):
+        """Сброс времени уведомлений до дефолтных"""
         if self.times == self.default_times:
             return False
         self.times = self.default_times.copy()
@@ -185,6 +200,7 @@ class PatientUser(BasicUser):
         if check_usr and (not get_patient_by_chat_id(self.chat_id)
                           or not self.accept_times):
             raise ValueError()
+        # Флаги, чтобы узнать изменилось ли время или часовой пояс
         ch_times = ch_tz = False
         if self.times != self.orig_t or self.location != self.orig_loc:
             if self.location != self.orig_loc:
@@ -196,26 +212,18 @@ class PatientUser(BasicUser):
             if self.times != self.orig_t:
                 self.orig_t = self.times.copy()
                 ch_times = True
-            if self.tz.localize(self.times['MOR']).time() < \
-                    dt.datetime.now(tz=self.tz).time() < \
-                    self.tz.localize(self.times['EVE']).time():
-                self.set_curr_state('MOR')
-            else:
-                self.set_curr_state('EVE')
+
+            self._set_curr_state_by_time()
 
             if check_usr:
-                Thread(target=self._threading_save,
+                Thread(target=self._threading_save_sett,
                        args=(ch_times, ch_tz)).start()
-                # thread.start()
-                # thread.join()
 
             # Восстанавливливаем уведомления
             self.recreate_notification(context)
-            if not context.job_queue.get_jobs_by_name(
-                    f'{self.chat_id}-rep_task'):
-                self.restore_repeating_task(context)
+            self.restore_repeating_task(context)
 
-    def _threading_save(self, ch_times, ch_tz):
+    def _threading_save_sett(self, ch_times, ch_tz):
         if ch_times:
             change_accept_time(self.accept_times['MOR'],
                                self.times['MOR'].time())
@@ -224,13 +232,12 @@ class PatientUser(BasicUser):
         if ch_tz:
             change_patients_time_zone(self.chat_id, self.tz.zone)
 
-        # self.check_user_records(
-        #     get_last_record_by_accept_time(self.accept_times['MOR']),
-        #     get_last_record_by_accept_time(self.accept_times['EVE']))
+        self.check_user_records()
 
     def restore(self, times: Dict[str, dt.time], tz_str: str,
-                accept_times=None):
+                accept_times):
         super().register()
+
         # Конвертирование часового пояса из строки в объект
         self.tz = pytz.timezone(tz_str)
 
@@ -242,30 +249,21 @@ class PatientUser(BasicUser):
             hour=times[k].hour, minute=times[k].minute) for k in times.keys()}
 
         self.accept_times = accept_times
-        self.orig_t = self.times
-        self.orig_loc = self.location
+        self.orig_t, self.orig_loc = self.times, self.location
 
-        # Восстановление состояния диалога после рестарта бота
-        now = dt.datetime.now(tz=self.tz)
-        if self.tz.localize(self.times['MOR']).time() < now.time() < \
-                self.tz.localize(self.times['EVE']).time():
-            self.set_curr_state('MOR')
-        else:
-            self.set_curr_state('EVE')
+        self._set_curr_state_by_time()
 
     def register(self, update: Update, context: CallbackContext):
         super().register()
         logging.info(f'REGISTER NEW USER: '
                      f'{update.effective_user.id} - {self.code}')
         Thread(target=self._threading_reg, args=(update, context)).start()
-        # thread.start()
-        # thread.join()
 
     def _threading_reg(self, update: Update, context: CallbackContext):
         self.tz = pytz.timezone('Etc/GMT-3')
         self.times = {
-            'MOR': dt.datetime(1212, 12, 12, 8, 00, 0),
-            'EVE': dt.datetime(1212, 12, 12, 20, 43, 0)
+            'MOR': dt.datetime(1212, 12, 12, 17, 42, 0),
+            'EVE': dt.datetime(1212, 12, 12, 18, 29, 0)
         }
 
         self.save_updating(context, check_usr=False)
@@ -279,24 +277,54 @@ class PatientUser(BasicUser):
             chat_id=self.chat_id
         )
 
+    def save_patient_record(self):
+        print(self.data_response)
+        Thread(target=self._threading_save_record).start()
+
+    def _threading_save_record(self):
+        add_record(
+            time_zone=self.tz.zone,
+            time=self.times[self.state()[0]].time(),
+            response_time=dt.datetime.now(self.tz),
+            accept_time_id=self.accept_times[self.state()[0]],
+            sys_press=self.data_response['sys'],
+            dias_press=self.data_response['dias'],
+            heart_rate=self.data_response['heart'],
+            comment=self.pill_response
+        )
+
     def check_user(self):
         patient = get_patient_by_chat_id(self.chat_id)
-        # patronage = get_patronage_by_chat_id(self.chat_id)
+        patronage = get_patronage_by_chat_id(self.chat_id)
         if patient:
             if not patient.member:
                 return False
             return None
         return True
 
-    def check_user_records(self, mor_records, eve_records):
-        # TODO проверка последней даты
-        # TODO вызов аларма для патронажа
-        if not mor_records and not eve_records:
-            return
-        if mor_records:
-            rec: Record = mor_records[-1]
-            now = dt.datetime.now(tz=self.tz).time()
-            print(rec.time - now)
+    def check_user_records(self):
+        mor_record = self.check_last_record_by_name(self.accept_times['MOR'])
+        eve_record = self.check_last_record_by_name(self.accept_times['EVE'])
+        if mor_record or eve_record:
+            # TODO вызов аларма
+            pass
+
+    def check_last_record_by_name(self, name) -> Tuple[bool, int]:
+        """
+        :param name:
+        :return: True if all right and last record time less than 24 hour
+        :return: False if last record time more then 24 hour
+        """
+        recs = get_last_record_by_accept_time(self.accept_times[name])
+        hours = 24
+        if recs:
+            rec: Record = recs[-1]
+            now = dt.datetime.now(tz=self.tz)
+            hours = abs(rec.response_time.astimezone(self.tz) -
+                        now).seconds // 3600
+            if hours < 24:
+                return True, hours
+        return False, hours
 
 
 class PatronageUser(BasicUser):
@@ -319,42 +347,44 @@ class PatronageUser(BasicUser):
 
     @staticmethod
     def make_file_by_patient(patient):
-        # with db_session.create_session() as db_sess:
-        arr_sys_press, arr_dias_press, arr_heart_rate, arr_time, \
-        arr_time_zone, arr_id = [], [], [], [], [], []
-        for accept_time in patient.accept_time:
-            for record in accept_time.record:
-                arr_sys_press.append(record.sys_press)
-                arr_dias_press.append(record.dias_press)
-                arr_heart_rate.append(record.heart_rate)
-                arr_time.append(record.time)
-                arr_time_zone.append(record.time_zone)
-        df = DataFrame({'Систолическое давление': arr_sys_press,
-                        'Диастолическое давление': arr_dias_press,
-                        'Частота сердечных сокращений': arr_heart_rate,
-                        'Время приема таблеток и измерений': arr_time,
-                        'Часовой пояс': arr_time_zone})
-        df.to_excel('static/' + patient.user_code + '.xlsx')
+        with db_session.create_session() as db_sess:
+            arr_sys_press, arr_dias_press, arr_heart_rate, arr_time, \
+            arr_time_zone, arr_id = [], [], [], [], [], []
+            for accept_time in patient.accept_time:
+                for record in accept_time.record:
+                    arr_sys_press.append(record.sys_press)
+                    arr_dias_press.append(record.dias_press)
+                    arr_heart_rate.append(record.heart_rate)
+                    arr_time.append(record.time)
+                    arr_time_zone.append(record.time_zone)
+            df = DataFrame({'Систолическое давление': arr_sys_press,
+                            'Диастолическое давление': arr_dias_press,
+                            'Частота сердечных сокращений': arr_heart_rate,
+                            'Время приема таблеток и измерений': arr_time,
+                            'Часовой пояс': arr_time_zone})
+            df.to_excel('static/' + patient.user_code + '.xlsx')
 
     @staticmethod
     def make_file_patients():
         arr_sys_press, arr_dias_press, arr_heart_rate, arr_time, arr_time_zone, \
         arr_patient_user_code, arr_patient_id = [], [], [], [], [], [], []
-        records = db_sess.query(Patient, Record).join(Patient).join(AcceptTime).join(Record).all()
-        print(records)
-        # for record in records:
-        #     arr_patient_id.append(patient.id)
-        #     arr_patient_user_code.append(patient.user_code)
-        #     arr_sys_press.append(record.sys_press)
-        #     arr_dias_press.append(record.dias_press)
-        #     arr_heart_rate.append(record.heart_rate)
-        #     arr_time.append(record.time)
-        #     arr_time_zone.append(record.time_zone)
-        # df = DataFrame({'ID пациента': arr_patient_id,
-        #                 'Код пациента': arr_patient_user_code,
-        #                 'Систолическое давление': arr_sys_press,
-        #                 'Диастолическое давление': arr_dias_press,
-        #                 'Частота сердечных сокращений': arr_heart_rate,
-        #                 'Время приема таблеток и измерений': arr_time,
-        #                 'Часовой пояс': arr_time_zone})
-        # df.to_excel(f'static/statistics.xlsx')
+        patients = db_sess.query(Patient).all()
+        # print(records)
+        for patient in patients:
+            for accept_time in patient.accept_time:
+                for record in accept_time.record:
+                    arr_patient_id.append(patient.id)
+                    arr_patient_user_code.append(patient.user_code)
+                    arr_sys_press.append(record.sys_press)
+                    arr_dias_press.append(record.dias_press)
+                    arr_heart_rate.append(record.heart_rate)
+                    arr_time.append(record.time)
+                    arr_time_zone.append(record.time_zone)
+        df = DataFrame({'ID пациента': arr_patient_id,
+                        'Код пациента': arr_patient_user_code,
+                        'Систолическое давление': arr_sys_press,
+                        'Диастолическое давление': arr_dias_press,
+                        'Частота сердечных сокращений': arr_heart_rate,
+                        'Время приема таблеток и измерений': arr_time,
+                        'Часовой пояс': arr_time_zone})
+        df.to_excel(f'static/statistics.xlsx')

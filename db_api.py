@@ -34,8 +34,8 @@ def add_patient(time_morn, time_even, **kwargs: Any):
         patient = Patient(**kwargs)
         db_sess.add(patient)
         db_sess.commit()
-        return {'MOR': add_accept_time(time_morn, patient),
-                'EVE': add_accept_time(time_even, patient)}
+    return {'MOR': add_accept_time(time_morn, patient),
+            'EVE': add_accept_time(time_even, patient)}
 
 
 def get_patient_by_chat_id(chat_id: int) -> Patient:
@@ -62,6 +62,7 @@ def del_patient(id):
             db_sess.delete(accept_time)
         db_sess.delete(patient)
         db_sess.commit()
+
 
 def change_patients_time_zone(chat_id: int, time_zone: int) -> None:
     with db_session.create_session() as db_sess:
@@ -105,7 +106,7 @@ def get_patronage_by_chat_id(chat_id: int) -> Patronage:
                                                == chat_id).first()
 
 
-def add_record(accept_time, **kwargs: Any) -> None:
+def add_record(**kwargs: Any) -> None:
     with db_session.create_session() as db_sess:
         record = Record(**kwargs)
         db_sess.add(record)
@@ -114,15 +115,15 @@ def add_record(accept_time, **kwargs: Any) -> None:
 
 def get_last_record_by_accept_time(accept_time_id):
     with db_session.create_session() as db_sess:
-        last_record = db_sess.query(Record).filter(
+        records = db_sess.query(Record).filter(
             Record.accept_time_id == accept_time_id).all()
-        return last_record
+        return records
 
 
-def make_file_by_patient(id):
+def make_file_by_patient_user_code(user_code):
     with db_session.create_session() as db_sess:
         records = db_sess.query(Record).join(AcceptTime).join(
-            Patient).filter(Patient.id == id).all()
+            Patient).filter(Patient.user_code == user_code).all()
         arr_sys_press, arr_dias_press, arr_heart_rate, arr_time, arr_time_zone, \
         arr_id = [], [], [], [], [], []
         for record in records:
@@ -136,7 +137,7 @@ def make_file_by_patient(id):
                            'Частота сердечных сокращений': arr_heart_rate,
                            'Время приема таблеток и измерений': arr_time,
                            'Часовой пояс': arr_time_zone})
-        df.to_excel('static/' + str(id) + '.xlsx')
+        df.to_excel('static/' + user_code + '.xlsx')
 
 
 def make_file_patients():
