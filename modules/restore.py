@@ -40,6 +40,8 @@ class Restore:
         # Восстановление цикличных тасков. Если для них соответствует время
         p.restore_repeating_task(self.context)
 
+        p.check_user_records(self.context)
+
         logging.info(f'RESTORED PATIENT NOTIFICATIONS: {p.chat_id}')
         Restore.restore_patient_msg(self.context, chat_id=patient.chat_id)
 

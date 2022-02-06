@@ -75,21 +75,25 @@ def repeating_task(context: CallbackContext):
     job = context.job
     data = job.context
 
-    if data['user'].msg_to_del:
+    user = data['user']
+
+    if user.msg_to_del:
         # Удаляем старое сообщение
-        context.bot.delete_message(data['user'].chat_id,
-                                   data['user'].msg_to_del.message_id)
+        context.bot.delete_message(user.chat_id, user.msg_to_del.message_id)
+
+    user.check_user_records(context)
 
     # Запускаем новое уведомление
-    data['user'].notification_states[data['name']][
-        data['user'].state()[1]].pre_start(context, data)
+    user.notification_states[data['name']][user.state()[1]].pre_start(
+        context, data)
 
 
-def deleting_pre_start_msg_task(context):
+def deleting_pre_start_msg_task(context: CallbackContext):
     job = context.job
     data = job.context
     try:
         user = data['user']
         context.bot.delete_message(user.chat_id, data['msg_id'])
+        user.check_user_records(context)
     except Exception as e:
         remove_job_if_exists(f'{data["chat_id"]}-pre_start_msg', context)

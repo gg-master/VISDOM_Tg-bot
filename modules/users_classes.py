@@ -20,7 +20,7 @@ from data.record import Record
 
 from db_api import get_patient_by_chat_id, add_patient, change_accept_time, \
     change_patients_time_zone, get_last_record_by_accept_time, add_patronage, \
-    get_patronage_by_chat_id, add_record
+    get_patronage_by_chat_id, add_record, get_all_patronages
 
 from pandas import DataFrame
 from data import db_session
@@ -134,9 +134,11 @@ class PatientUser(BasicUser):
 
         if now < first.time() or now > last.time():
             return None
-
-        interval = dt.timedelta(hours=1) if state_name == 'MOR' \
-            else dt.timedelta(minutes=30)
+        # TODO подправить время интервала
+        interval = dt.timedelta(
+            # hours=1,
+            minutes=2) if state_name == 'MOR' \
+            else dt.timedelta(minutes=2)
 
         f = dt.timedelta(hours=first.hour, minutes=first.minute)
         n = dt.timedelta(hours=now.hour, minutes=now.minute)
@@ -232,8 +234,6 @@ class PatientUser(BasicUser):
         if ch_tz:
             change_patients_time_zone(self.chat_id, self.tz.zone)
 
-        self.check_user_records()
-
     def restore(self, times: Dict[str, dt.time], tz_str: str,
                 accept_times):
         super().register()
@@ -260,6 +260,7 @@ class PatientUser(BasicUser):
         Thread(target=self._threading_reg, args=(update, context)).start()
 
     def _threading_reg(self, update: Update, context: CallbackContext):
+        # TODO удалить кастомные настройки перед деплоем
         self.tz = pytz.timezone('Etc/GMT-3')
         self.times = {
             'MOR': dt.datetime(1212, 12, 12, 17, 42, 0),
@@ -296,18 +297,25 @@ class PatientUser(BasicUser):
     def check_user(self):
         patient = get_patient_by_chat_id(self.chat_id)
         patronage = get_patronage_by_chat_id(self.chat_id)
+        # TODO добавить проверку по патронажу
         if patient:
             if not patient.member:
                 return False
             return None
         return True
 
-    def check_user_records(self):
-        mor_record = self.check_last_record_by_name(self.accept_times['MOR'])
-        eve_record = self.check_last_record_by_name(self.accept_times['EVE'])
-        if mor_record or eve_record:
-            # TODO вызов аларма
-            pass
+    def check_user_records(self, context: CallbackContext):
+        Thread(target=self._thread_check_user_records, args=(context,)).start()
+
+    def _thread_check_user_records(self, context: CallbackContext):
+        mor_record = self.check_last_record_by_name('MOR')
+        eve_record = self.check_last_record_by_name('EVE')
+        if (not mor_record[0] and mor_record[1] > 24) or \
+                (not eve_record[0] and eve_record[1] > 24):
+            PatronageUser.send_alarm(
+                context=context,
+                user=self
+            )
 
     def check_last_record_by_name(self, name) -> Tuple[bool, int]:
         """
@@ -320,8 +328,8 @@ class PatientUser(BasicUser):
         if recs:
             rec: Record = recs[-1]
             now = dt.datetime.now(tz=self.tz)
-            hours = abs(rec.response_time.astimezone(self.tz) -
-                        now).seconds // 3600
+            hours = abs(now - rec.response_time.astimezone(
+                self.tz)).total_seconds() // 3600
             if hours < 24:
                 return True, hours
         return False, hours
@@ -344,6 +352,19 @@ class PatronageUser(BasicUser):
         add_patronage(
             chat_id=self.chat_id
         )
+
+    @staticmethod
+    def send_alarm(context, **kwargs):
+        user = kwargs['user']
+
+        patient = get_patient_by_chat_id(user.chat_id)
+
+        patronage = get_all_patronages()[0]
+        text = f'❗️ Внимание ❗️\n' \
+               f'В течении суток пациент {patient.user_code} не принял ' \
+               f'лекарство/не отправил данные давления и ЧСС.\n'
+
+        context.bot.send_message(patronage.chat_id, text)
 
     @staticmethod
     def make_file_by_patient(patient):
