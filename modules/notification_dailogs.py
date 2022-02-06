@@ -289,6 +289,7 @@ class DataCollectionDialog(ConversationHandler):
 
     @staticmethod
     def end(update: Update, context: CallbackContext):
+        # TODO перенести в поток добавление результатов
         from modules.users_classes import PatientUser
         print(context.user_data['user'].data_response)
         user: PatientUser = context.user_data['user']

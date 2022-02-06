@@ -4,7 +4,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext
 
 
-from db_api import get_accept_time_by_patient, get_all_patients, \
+from db_api import get_accept_times_by_patient_id, get_all_patients, \
     get_patient_by_chat_id, get_all_patronages
 from tools.decorators import not_registered_users
 
@@ -23,7 +23,7 @@ class Restore:
         patients = get_all_patients()
         for patient in patients:
             if patient.chat_id != 394 and patient.member:
-                accept_times = get_accept_time_by_patient(patient)
+                accept_times = get_accept_times_by_patient_id(patient.id)
                 self.restore_patient(patient, accept_times)
 
     def restore_patient(self, patient, accept_times):
@@ -87,7 +87,7 @@ def patient_restore_handler(update: Update, context: CallbackContext):
     from modules.start_dialogs import PatientRegistrationDialog
 
     p = get_patient_by_chat_id(update.effective_chat.id)
-    accept_times = get_accept_time_by_patient(p)
+    accept_times = get_accept_times_by_patient_id(p.id)
 
     context.user_data['user'] = PatientUser(update.effective_chat.id)
     context.user_data['user'].restore(

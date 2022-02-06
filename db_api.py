@@ -29,7 +29,6 @@ def add_accept_time(time, patient: Patient) -> None:
     return accept_time.id
 
 
-
 def add_patient(time_morn, time_even, **kwargs: Any):
     with db_session.create_session() as db_sess:
         patient = Patient(**kwargs)
@@ -96,8 +95,8 @@ def add_patronage(**kwargs: Any) -> None:
 
 
 def get_all_patronages():
-    with create_session() as dbs:
-        return dbs.query(Patronage).all()
+    with db_session.create_session() as db_sess:
+        return db_sess.query(Patronage).all()
 
 
 def get_patronage_by_chat_id(chat_id: int) -> Patronage:
