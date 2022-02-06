@@ -16,11 +16,9 @@ db_sess = create_session()
 
 
 def add_accept_time(time, patient: Patient) -> int:
-    dbs = create_session()
     accept_time = AcceptTime(time=time, patient=patient)
-    dbs.add(accept_time)
-    dbs.commit()
-    dbs.close()
+    db_sess.add(accept_time)
+    db_sess.commit()
     return accept_time.id
 
 
@@ -33,21 +31,18 @@ def get_accept_time_by_patient(patient: Patient):
 
 
 def add_patient(time_morn, time_even, **kwargs: Any):
-    dbs = create_session()
-    patient = Patient(**kwargs)
-    dbs.add(patient)
-    dbs.commit()
-    res = {'MOR': add_accept_time(time_morn, patient),
-           'EVE': add_accept_time(time_even, patient)}
-    dbs.close()
-    return res
+    global db_sess
+    with create_session() as db_sess:
+        patient = Patient(**kwargs)
+        db_sess.add(patient)
+        db_sess.commit()
+        return {'MOR': add_accept_time(time_morn, patient),
+                'EVE': add_accept_time(time_even, patient)}
 
 
 def get_patient_by_chat_id(chat_id: int) -> Patient:
-    dbs = create_session()
-    res = dbs.query(Patient).filter(Patient.chat_id == chat_id).first()
-    dbs.close()
-    return res
+    with create_session() as dbs:
+        return dbs.query(Patient).filter(Patient.chat_id == chat_id).first()
 
 
 def get_patient_by_user_code(user_code: str) -> Patient:
@@ -62,9 +57,21 @@ def get_all_patients() -> list:
 
 
 def change_patients_time_zone(chat_id: int, time_zone: int) -> None:
+    dbs = create_session()
     patient = get_patient_by_chat_id(chat_id)
     patient.time_zone = time_zone
-    db_sess.commit()
+    dbs.add(patient)
+    dbs.commit()
+    dbs.close()
+
+
+def change_accept_time(accept_time_id, time):
+    dbs = create_session()
+    accept_time = dbs.query(AcceptTime).filter(AcceptTime.id == accept_time_id).first()
+    accept_time.time = time
+    dbs.add(accept_time)
+    dbs.commit()
+    dbs.close()
 
 
 def change_patients_membership(chat_id: int, member: bool) -> None:
@@ -74,13 +81,21 @@ def change_patients_membership(chat_id: int, member: bool) -> None:
 
 
 def add_patronage(**kwargs: Any) -> None:
+    dbs = create_session()
     patronage = Patronage(**kwargs)
-    db_sess.add(patronage)
-    db_sess.commit()
+    dbs.add(patronage)
+    dbs.commit()
+    dbs.close()
+
+
+def get_all_patronages():
+    with create_session() as dbs:
+        return dbs.query(Patronage).all()
 
 
 def get_patronage_by_chat_id(chat_id: int) -> Patronage:
-    return db_sess.query(Patronage).filter(Patronage.chat_id == chat_id).first()
+    with create_session() as dbs:
+        return dbs.query(Patronage).filter(Patronage.chat_id == chat_id).first()
 
 
 def add_record(**kwargs: Any) -> None:
@@ -89,6 +104,14 @@ def add_record(**kwargs: Any) -> None:
     dbs.add(record)
     dbs.commit()
     dbs.close()
+
+
+def get_last_record_by_accept_time(accept_time_id):
+    dbs = create_session()
+    last_record = dbs.query(Record).filter(
+        Record.accept_time_id == accept_time_id).all()
+    dbs.close()
+    return last_record
 
 # def make_file_by_patient(patient):
 #     arr_sys_press, arr_dias_press, arr_heart_rate, arr_time, arr_time_zone, \
@@ -111,3 +134,4 @@ def add_record(**kwargs: Any) -> None:
     # print(accept_time)
     # response = db_sess.query(Record).filter(Record.accept_time == accept_time)
     # print(response)
+

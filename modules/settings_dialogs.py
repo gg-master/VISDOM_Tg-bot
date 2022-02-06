@@ -91,15 +91,22 @@ class SettingsDialog(ConversationHandler):
 
     @staticmethod
     def confirm(update: Update, context: CallbackContext):
-        context.user_data['user'].save_updating(context)
-        text = 'Изменения сохранены.'
+        update.callback_query.delete_message()
         keyboard = ReplyKeyboardMarkup(
             [['Справка', 'Настройки']], row_width=1, resize_keyboard=True)
-
-        update.callback_query.delete_message()
-
-        update.effective_chat.send_message(text=text, reply_markup=keyboard)
-        return END
+        try:
+            context.user_data['user'].save_updating(context)
+            text = 'Изменения сохранены.'
+            update.effective_chat.send_message(text=text,
+                                               reply_markup=keyboard)
+        except ValueError as e:
+            context.user_data['user'].cancel_updating()
+            text = 'Изменения не удалось сохранить.\n' \
+                   'Попробуйте снова через некоторое время.'
+            update.effective_chat.send_message(
+                text=text, reply_markup=keyboard)
+        finally:
+            return END
 
     @staticmethod
     def stop(update: Update, context: CallbackContext):

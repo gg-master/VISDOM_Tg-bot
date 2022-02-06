@@ -1,3 +1,6 @@
+import pytz
+import datetime as dt
+
 from telegram.ext import CallbackContext
 
 
@@ -85,3 +88,12 @@ def repeating_task(context: CallbackContext):
     # Запускаем новое уведомление
     data['user'].notification_states[data['name']][
         data['user'].state()[1]].pre_start(context, data)
+
+
+def deleting_pre_start_msg_task(context):
+    job = context.job
+    data = job.context
+    try:
+        context.bot.delete_message(data['chat_id'], data['msg_id'])
+    except Exception as e:
+        pass

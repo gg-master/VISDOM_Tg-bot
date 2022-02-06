@@ -5,6 +5,7 @@ from telegram.ext import ConversationHandler, MessageHandler, Filters, \
 from modules.dialogs_shortcuts.start_shortcuts import SEND_USER_DATA_PAT, END
 from modules.users_classes import PatientUser, PatronageUser
 from tools.decorators import registered_patronages
+from db_api import get_patient_by_chat_id
 
 
 class PatronageJob(ConversationHandler):
@@ -32,7 +33,8 @@ class PatronageJob(ConversationHandler):
     @staticmethod
     def default_job(update: Update, context: CallbackContext):
         text = "Для использовния базовго функционала нажмите на" \
-               " одну из нужных кнопок:"
+               " одну из нужных кнопок. \nЧтобы прервать выполнение " \
+               "команд отправьте /stop."
         keyboard = ReplyKeyboardMarkup(
             [['Получить данные по пациенту',
               'Получить данные по всем пользователям'],
@@ -51,14 +53,19 @@ class PatronageJob(ConversationHandler):
     @registered_patronages
     def send_user_data(update: Update, context: CallbackContext):
         user_code = update.message.text
-        patient = PatientUser.get_patient_by_id(user_code)
-        if patient:
-            PatronageUser.make_file_by_patient(patient)
-            update.effective_chat.send_document(
-                open(f'static/{patient.user_code}.xlsx', 'rb'))
-        else:
+        try:
+            patient = get_patient_by_chat_id(int(user_code))
+            if patient:
+                PatronageUser.make_file_by_patient(patient)
+                update.effective_chat.send_document(
+                    open(f'static/{patient.user_code}.xlsx', 'rb'))
+            else:
+                update.message.reply_text('Пациента с таким кодом не существует')
+        except Exception as e:
+            print(e)
             update.message.reply_text('Пациента с таким кодом не существует')
-        return END
+        finally:
+            return END
 
     @staticmethod
     @registered_patronages

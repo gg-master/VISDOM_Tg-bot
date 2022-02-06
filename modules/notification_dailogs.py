@@ -1,3 +1,5 @@
+import datetime as dt
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ConversationHandler, CallbackQueryHandler, \
     CallbackContext, CommandHandler, MessageHandler, Filters, \
@@ -13,6 +15,7 @@ class PillTakingDialog(ConversationHandler):
     def __init__(self):
         super().__init__(
             name=self.__class__.__name__,
+            conversation_timeout=dt.timedelta(hours=1, minutes=30),
             entry_points=[CallbackQueryHandler(self.start,
                                                pattern=f'^{PILL_TAKING}$')],
             states={
@@ -49,7 +52,6 @@ class PillTakingDialog(ConversationHandler):
         msg = context.bot.send_message(data['user'].chat_id,
                                        text=text,
                                        reply_markup=keyboard)
-        print(context.user_data)
         user = context.job.context['user'] if context.job \
             else context.user_data['user']
         user.msg_to_del = msg
@@ -163,6 +165,9 @@ class DataCollectionDialog(ConversationHandler):
     def __init__(self):
         super().__init__(
             name=self.__class__.__name__,
+            conversation_timeout=dt.timedelta(
+                # hours=1,
+                minutes=2),
             entry_points=[CallbackQueryHandler(self.start,
                                                pattern=f'^{DATA_COLLECT}$')],
             states={
@@ -215,10 +220,10 @@ class DataCollectionDialog(ConversationHandler):
 
         sys, dias, heart = response.values()
         if any(response.values()):
-            text += f'\nВаши данные:' \
-                    f'\n{("САД: " + str(sys)) if sys else ""}' \
-                    f'\n{("ДАД: " + str(dias)) if dias else ""}' \
-                    f'\n{("ЧСС: " + str(heart)) if heart else ""}'
+            text += f'\nВаши данные:'
+            text += ("\nСАД: " + str(sys)) if sys else ''
+            text += ("\nДАД: " + str(dias)) if sys else ''
+            text += ("\nЧСС: " + str(heart)) if sys else ''
 
         keyboard = InlineKeyboardMarkup(
             [
@@ -288,15 +293,15 @@ class DataCollectionDialog(ConversationHandler):
         print(context.user_data['user'].data_response)
         user: PatientUser = context.user_data['user']
 
-        # TODO запрос в бд для сохранения данных
-        # add_record(
-        #     time=user.times[user.state()[0]].time(),
-        #     sys_press=user.data_response['sys'],
-        #     dias_press=user.data_response['dias'],
-        #     heart_rate=user.data_response['heart'],
-        #     time_zone=user.tz.zone,
-        #     accept_time_id=user.accept_times[user.state()[0]]
-        # )
+        add_record(
+            # time=dt.datetime.now(user.tz).time(),
+            time=user.times[user.state()[0]].time(),
+            sys_press=user.data_response['sys'],
+            dias_press=user.data_response['dias'],
+            heart_rate=user.data_response['heart'],
+            time_zone=user.tz.zone,
+            accept_time_id=user.accept_times[user.state()[0]]
+        )
         user.clear_responses()
 
         text = "Мы сохранили Ваш ответ. Спасибо!"

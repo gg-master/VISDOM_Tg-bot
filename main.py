@@ -4,7 +4,8 @@ from telegram import Update
 from telegram.ext import CommandHandler, Updater, MessageHandler, \
     Filters, Defaults, CallbackQueryHandler
 
-from modules.restore import Restore, patient_restore_handler
+from modules.restore import Restore, patient_restore_handler, \
+    patronage_restore_handler
 from modules.start_dialogs import StartDialog, PatronageJob
 from modules.settings_dialogs import SettingsDialog
 from modules.notification_dailogs import PillTakingDialog, DataCollectionDialog
@@ -67,6 +68,8 @@ def main():
 
     dp.add_handler(CallbackQueryHandler(patient_restore_handler,
                                         pattern='^RESTORE_PATIENT$'))
+    dp.add_handler(CallbackQueryHandler(patronage_restore_handler,
+                                        pattern='^RESTORE_PATRONAGE$'))
 
     dp.add_handler(CommandHandler("help", help_msg))
     dp.add_handler(MessageHandler(Filters.regex('^Справка$'), help_msg))

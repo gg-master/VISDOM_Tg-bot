@@ -5,6 +5,7 @@ from telegram.ext import (
     Filters, CallbackQueryHandler,
 )
 
+from db_api import get_all_patronages, get_patronage_by_chat_id
 from modules.patronage_dialogs import PatronageJob
 from modules.users_classes import BasicUser, PatientUser, PatronageUser
 from modules.dialogs_shortcuts.start_shortcuts import *
@@ -24,7 +25,6 @@ def user_separation(func):
             if type(user) is PatientUser:
                 PatientRegistrationDialog.restore_main_msg(update, context)
             elif type(user) is PatronageUser:
-                # TODO добавить функцию восстановления кнопок для патронажа
                 PatronageJob.default_job(update, context)
             return END
     return decorated_func
@@ -220,7 +220,7 @@ class PatientRegistrationDialog(ConversationHandler):
         update.callback_query.delete_message()
         text = 'Вы не можете повторно зарегистрироваться.\n'
         update.effective_chat.send_message(text)
-        Restore.restore_msg(context, chat_id=update.effective_chat.id)
+        Restore.restore_patient_msg(context, chat_id=update.effective_chat.id)
         return STOPPING
 
     @staticmethod
@@ -475,8 +475,8 @@ class PatronageRegistrationDialog(ConversationHandler):
         super().__init__(
             name=self.__class__.__name__,
             entry_points=[CallbackQueryHandler(
-                self.start, pattern=f'^{SIGN_UP_AS_PATRONAGE}$'),
-                CommandHandler('reg_patronage', self.start)],
+                self.pre_start, pattern=f'^{SIGN_UP_AS_PATRONAGE}$'),
+                CommandHandler('reg_patronage', self.pre_start)],
             states={
                 TYPING_TOKEN: [
                     MessageHandler(Filters.text & ~Filters.command,
@@ -496,8 +496,19 @@ class PatronageRegistrationDialog(ConversationHandler):
 
     @staticmethod
     @not_registered_users
+    def pre_start(update: Update, context: CallbackContext):
+        if get_patronage_by_chat_id(update.effective_chat.id):
+            text = 'Вы не можете повторно зарегистрироваться.\n'
+            update.effective_chat.send_message(text)
+            Restore.restore_patronage_msg(
+                context, chat_id=update.effective_chat.id)
+            return END
+        return PatronageRegistrationDialog.start(update, context)
+
+
+    @staticmethod
     def start(update: Update, context: CallbackContext):
-        text = f'Введите токен для регистрации в качестве патронажа'
+        text = f'Введите токен для регистрации сотрудника.'
 
         context.bot.delete_message(update.message.chat_id,
                                    context.chat_data['st_msg'])
@@ -509,8 +520,13 @@ class PatronageRegistrationDialog(ConversationHandler):
     @staticmethod
     def get_token(update: Update, context: CallbackContext):
         token = update.message.text
+        other_patronages = get_all_patronages()
+        if other_patronages:
+            update.effective_chat.send_message(
+                'Вы не можете зарегистрироваться как сотрудник.')
+            return END
         if token == get_from_env('PATRONAGE_TOKEN'):
-            context.user_data['user'] = PatronageUser()
+            context.user_data['user'] = PatronageUser(update.effective_chat.id)
             context.user_data['user'].register(update, context)
             # keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(
             #     text='Начать работу', callback_data=DEFAULT_JOB)]])

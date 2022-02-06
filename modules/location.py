@@ -74,7 +74,7 @@ class FindLocationDialog(ConversationHandler):
                     MessageHandler(Filters.location, self.location_response,
                                    run_async=False),
                     MessageHandler(Filters.regex('^Назад$'),
-                                   self.back_to_prev_level)],
+                                   self.back_to_prev_level, run_async=False)],
                 2: [MessageHandler(Filters.text & ~Filters.command,
                                    self.find_response)],
                 3: [MessageHandler(Filters.regex('^Да, верно$|^Нет, неверно$'),
@@ -177,6 +177,10 @@ class FindLocationDialog(ConversationHandler):
             from modules.start_dialogs import ConfigureTZDialog
             context.user_data[CONF_TZ_OVER] = True
             ConfigureTZDialog.start(update, context)
+        else:
+            from modules.settings_dialogs import SettingsConfTZDialog
+            context.user_data[CONF_TZ_OVER] = True
+            SettingsConfTZDialog.start(update, context)
         return END
 
     @staticmethod
