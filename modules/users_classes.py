@@ -281,8 +281,8 @@ class PatientUser(BasicUser):
 
     def check_user(self):
         patient = get_patient_by_chat_id(self.chat_id)
-        patronage = get_patronage_by_chat_id(self.chat_id)
-        if patient or patronage:
+        # patronage = get_patronage_by_chat_id(self.chat_id)
+        if patient:
             if not patient.member:
                 return False
             return None
