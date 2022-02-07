@@ -28,7 +28,8 @@ def help_msg(update: Update, context: CallbackContext):
         update.message.reply_text(
             "Справка.\nЕсли Вы ранее не регистрировались, то чтобы начать "
             "работу с ботом, введите: /start\n\n"
-            "Если Вы уже регистрировались, то восстановите доступ.")
+            "Если Вы уже регистрировались, то восстановите доступ c помощью "
+            "соответствующего сообщения.")
     elif type(context.user_data.get('user')) is BasicUser:
         update.message.reply_text(
             "Справка.\nЧтобы получить больше возможностей зарегистрируйтесь.")

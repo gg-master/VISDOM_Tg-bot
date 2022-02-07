@@ -278,6 +278,14 @@ class PatientUser(BasicUser):
         #     'MOR': dt.datetime(1212, 12, 12, 17, 51, 0),
         #     'EVE': dt.datetime(1212, 12, 12, 17, 53, 0)
         # }
+
+        # Обрабатываем часовой пояс паципента при регистрации
+        self.tz = pytz.timezone(convert_tz(self.location.get_coords(),
+                                           self.location.time_zone()))
+        self.orig_loc = self.location = Location(tz=-int(re.search(
+            pattern=r'[+-]?\d+', string=self.tz.zone).group(0)))
+
+        # Добавляем пациента в бд
         self.accept_times = add_patient(
             time_morn=self.times['MOR'].time(),
             time_even=self.times['EVE'].time(),
@@ -286,11 +294,10 @@ class PatientUser(BasicUser):
             time_zone=self.tz.zone,
             chat_id=self.chat_id
         )
-
         self.save_updating(context, check_usr=False)
 
     def save_patient_record(self):
-        print(self.data_response)
+        # print(self.data_response)
         self.alarmed[self.state()[0]] = False
         Thread(target=self._threading_save_record).start()
 
@@ -320,15 +327,15 @@ class PatientUser(BasicUser):
 
     def check_user_records(self, context: CallbackContext):
         # Если аларм у пользователя уже сработал, то заново не активируем
-        if any(self.alarmed.values()):
+        if any(self.alarmed.values()) or not self.accept_times:
             return None
         Thread(target=self._thread_check_user_records, args=(context,)).start()
 
     def _thread_check_user_records(self, context: CallbackContext):
         mor_record = self.check_last_record_by_name('MOR')
         eve_record = self.check_last_record_by_name('EVE')
-        if (not mor_record[0] and mor_record[1] > 24) or \
-                (not eve_record[0] and eve_record[1] > 24):
+        if (not mor_record[0] and mor_record[1] >= 25) or \
+                (not eve_record[0] and eve_record[1] >= 25):
             self.alarmed['MOR' if mor_record[1] > 24 else "EVE"] = True
             PatronageUser.send_alarm(
                 context=context,
@@ -383,6 +390,7 @@ class PatronageUser(BasicUser):
         kb = InlineKeyboardMarkup(
             [[InlineKeyboardButton(
                 'Получить данные о пациенте',
-                callback_data=f'A_PATIENT_DATA&{user.code}')]])
+                callback_data=f'A_PATIENT_DATA&{user.code}')]],
+            one_time_keyboard=True)
 
         context.bot.send_message(patronage.chat_id, text, reply_markup=kb)

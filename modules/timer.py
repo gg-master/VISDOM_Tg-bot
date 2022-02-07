@@ -41,6 +41,12 @@ def daily_task(context: CallbackContext):
     # Объект пользователя
     user = data['user']
 
+    # Сбрасываем флаг об уведомлении
+    user.alarmed[data['name']] = False
+
+    # Проверяем последний рекорд и при необходимости бъем тревогу
+    user.check_user_records()
+
     # Устанавливаем пользователю состояние диалога
     user.set_curr_state(data['name'])
 
@@ -55,7 +61,6 @@ def daily_task(context: CallbackContext):
     remove_job_if_exists(f'{user.chat_id}-rep_task', context)
 
     # Если с момента последней записи прошло более 24 часов, то устанавливаем
-
     if not user.check_last_record_by_name(data['name'])[0]:
         # Создание диалога для сбора данных
         user.notification_states[data['name']][
@@ -72,6 +77,7 @@ def daily_task(context: CallbackContext):
 
 
 def repeating_task(context: CallbackContext):
+    """Повторяющиеся уведомления в рамках временого лимита"""
     job = context.job
     data = job.context
 
@@ -81,6 +87,7 @@ def repeating_task(context: CallbackContext):
         # Удаляем старое сообщение
         context.bot.delete_message(user.chat_id, user.msg_to_del.message_id)
 
+    # Проверяем последний рекорд и при необходимости бъем тревогу
     user.check_user_records(context)
 
     # Запускаем новое уведомление
@@ -89,11 +96,13 @@ def repeating_task(context: CallbackContext):
 
 
 def deleting_pre_start_msg_task(context: CallbackContext):
+    """Удаление сообщения после временного лимита"""
     job = context.job
     data = job.context
     try:
         user = data['user']
         context.bot.delete_message(user.chat_id, data['msg_id'])
+        # Проверяем последний рекорд и при необходимости бъем тревогу
         user.check_user_records(context)
     except Exception as e:
         remove_job_if_exists(f'{data["chat_id"]}-pre_start_msg', context)

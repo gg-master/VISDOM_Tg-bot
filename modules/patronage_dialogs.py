@@ -75,16 +75,18 @@ class PatronageJob(ConversationHandler):
             return END
 
     @staticmethod
-    # @registered_patronages
+    @registered_patronages
     def alarm_send_p_data(update: Update, context: CallbackContext):
         # TODO проработка диалога аларма
         data = update.callback_query.data
         user_code = data[data.find('&') + 1:]
 
-        patient = get_patient_by_user_code(user_code)
         make_file_by_patient_user_code(user_code)
         update.effective_chat.send_document(
-            open(f'static/{patient.user_code}.xlsx', 'rb'))
+            open(f'static/{user_code}_data.xlsx', 'rb'))
+
+        context.bot.edit_message_reply_markup(
+            update.effective_chat.id, update.effective_message.message_id)
 
     @staticmethod
     @registered_patronages
