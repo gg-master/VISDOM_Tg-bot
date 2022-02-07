@@ -147,7 +147,7 @@ class PillTakingDialog(ConversationHandler):
             context.user_data['user'].pill_response = \
                 f'Я не могу принять лекарство. Причина: {update.message.text}'
             return PillTakingDialog.start(update, context)
-        text = 'Ваш ответ превышает слишком длинный.' \
+        text = 'Ваш ответ слишком длинный.' \
                '\nВозможное количество символов: 100'
         update.message.reply_text(text=text)
         return PillTakingDialog.reason(update, context)

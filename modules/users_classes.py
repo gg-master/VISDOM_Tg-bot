@@ -140,8 +140,8 @@ class PatientUser(BasicUser):
             return None
         # TODO подправить время интервала
         interval = dt.timedelta(
-            hours=1,
-            # minutes=2
+            # hours=1,
+            minutes=2
         ) if state_name == 'MOR' \
             else dt.timedelta(
             minutes=30
