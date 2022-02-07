@@ -109,11 +109,11 @@ class PatientUser(BasicUser):
                 user=self,
                 task_data={
                     'interval': dt.timedelta(
-                        # hours=1,
-                        minutes=2
+                        hours=1,
+                        # minutes=2
                     ) if name == 'MOR'
                     else dt.timedelta(
-                        minutes=2
+                        minutes=30
                     ),
                     'last': self.tz.localize(self.time_limiters[name][1]
                                              ).astimezone(pytz.utc).time()
@@ -142,12 +142,12 @@ class PatientUser(BasicUser):
             return None
         # TODO подправить время интервала
         interval = dt.timedelta(
-            # hours=1,
-            minutes=2
+            hours=1,
+            # minutes=2
         ) if state_name == 'MOR' \
             else dt.timedelta(
-            minutes=2
-                              )
+            minutes=30
+            )
 
         f = dt.timedelta(hours=first.hour, minutes=first.minute)
         n = dt.timedelta(hours=now.hour, minutes=now.minute)
@@ -273,11 +273,11 @@ class PatientUser(BasicUser):
 
     def _threading_reg(self, update: Update, context: CallbackContext):
         # TODO удалить кастомные настройки перед деплоем
-        self.tz = pytz.timezone('Etc/GMT-3')
-        self.times = {
-            'MOR': dt.datetime(1212, 12, 12, 17, 51, 0),
-            'EVE': dt.datetime(1212, 12, 12, 17, 53, 0)
-        }
+        # self.tz = pytz.timezone('Etc/GMT-3')
+        # self.times = {
+        #     'MOR': dt.datetime(1212, 12, 12, 17, 51, 0),
+        #     'EVE': dt.datetime(1212, 12, 12, 17, 53, 0)
+        # }
         self.accept_times = add_patient(
             time_morn=self.times['MOR'].time(),
             time_even=self.times['EVE'].time(),
@@ -312,8 +312,8 @@ class PatientUser(BasicUser):
         patient = get_patient_by_chat_id(self.chat_id)
         patronage = get_patronage_by_chat_id(self.chat_id)
         # TODO добавить проверку по патронажу
-        if patient:
-            if not patient.member:
+        if patient or patronage:
+            if not patronage and not patient.member:
                 return False
             return None
         return True
@@ -386,47 +386,3 @@ class PatronageUser(BasicUser):
                 callback_data=f'A_PATIENT_DATA&{user.code}')]])
 
         context.bot.send_message(patronage.chat_id, text, reply_markup=kb)
-
-    @staticmethod
-    def make_file_by_patient(patient):
-        with db_session.create_session() as db_sess:
-            arr_sys_press, arr_dias_press, arr_heart_rate, arr_time, \
-            arr_time_zone, arr_id = [], [], [], [], [], []
-            for accept_time in patient.accept_time:
-                for record in accept_time.record:
-                    arr_sys_press.append(record.sys_press)
-                    arr_dias_press.append(record.dias_press)
-                    arr_heart_rate.append(record.heart_rate)
-                    arr_time.append(record.time)
-                    arr_time_zone.append(record.time_zone)
-            df = DataFrame({'Систолическое давление': arr_sys_press,
-                            'Диастолическое давление': arr_dias_press,
-                            'Частота сердечных сокращений': arr_heart_rate,
-                            'Время приема таблеток и измерений': arr_time,
-                            'Часовой пояс': arr_time_zone})
-            df.to_excel('static/' + patient.user_code + '.xlsx')
-
-    @staticmethod
-    def make_file_patients():
-        arr_sys_press, arr_dias_press, arr_heart_rate, arr_time, arr_time_zone, \
-        arr_patient_user_code, arr_patient_id = [], [], [], [], [], [], []
-        patients = db_sess.query(Patient).all()
-        # print(records)
-        for patient in patients:
-            for accept_time in patient.accept_time:
-                for record in accept_time.record:
-                    arr_patient_id.append(patient.id)
-                    arr_patient_user_code.append(patient.user_code)
-                    arr_sys_press.append(record.sys_press)
-                    arr_dias_press.append(record.dias_press)
-                    arr_heart_rate.append(record.heart_rate)
-                    arr_time.append(record.time)
-                    arr_time_zone.append(record.time_zone)
-        df = DataFrame({'ID пациента': arr_patient_id,
-                        'Код пациента': arr_patient_user_code,
-                        'Систолическое давление': arr_sys_press,
-                        'Диастолическое давление': arr_dias_press,
-                        'Частота сердечных сокращений': arr_heart_rate,
-                        'Время приема таблеток и измерений': arr_time,
-                        'Часовой пояс': arr_time_zone})
-        df.to_excel(f'static/statistics.xlsx')
