@@ -52,6 +52,10 @@ class PatientUser(BasicUser):
         'MOR': dt.datetime(1212, 12, 12, 8, 00, 0),
         'EVE': dt.datetime(1212, 12, 12, 20, 00, 0)
     }
+    notification_states = {
+        'MOR': [PillTakingDialog, DataCollectionDialog],
+        'EVE': [DataCollectionDialog]
+    }
 
     def __init__(self, chat_id: int):
         super().__init__()
@@ -69,10 +73,8 @@ class PatientUser(BasicUser):
         # при обновлении уведомления.
         self.msg_to_del = self.active_dialog_msg = None
 
-        self.notification_states = {
-            'MOR': [PillTakingDialog, DataCollectionDialog],
-            'EVE': [DataCollectionDialog]
-        }
+        self.alarmed = False
+        # Текущее состояние диалога
         self.curr_state = []  # [name, index]
 
         # Ответы от пользователя на уведомления
@@ -225,6 +227,8 @@ class PatientUser(BasicUser):
             self.recreate_notification(context)
             self.restore_repeating_task(context)
 
+            self.check_user_records(context)
+
     def _threading_save_sett(self, ch_times, ch_tz):
         if ch_times:
             change_accept_time(self.accept_times['MOR'],
@@ -263,12 +267,9 @@ class PatientUser(BasicUser):
         # TODO удалить кастомные настройки перед деплоем
         self.tz = pytz.timezone('Etc/GMT-3')
         self.times = {
-            'MOR': dt.datetime(1212, 12, 12, 17, 42, 0),
+            'MOR': dt.datetime(1212, 12, 12, 9, 24, 0),
             'EVE': dt.datetime(1212, 12, 12, 18, 29, 0)
         }
-
-        self.save_updating(context, check_usr=False)
-
         self.accept_times = add_patient(
             time_morn=self.times['MOR'].time(),
             time_even=self.times['EVE'].time(),
@@ -278,8 +279,11 @@ class PatientUser(BasicUser):
             chat_id=self.chat_id
         )
 
+        self.save_updating(context, check_usr=False)
+
     def save_patient_record(self):
         print(self.data_response)
+        self.alarmed = False
         Thread(target=self._threading_save_record).start()
 
     def _threading_save_record(self):
@@ -291,10 +295,12 @@ class PatientUser(BasicUser):
             sys_press=self.data_response['sys'],
             dias_press=self.data_response['dias'],
             heart_rate=self.data_response['heart'],
-            comment=self.pill_response
+            comment=self.pill_response[self.pill_response.find(':') + 2:]
+            if self.pill_response and ':' in self.pill_response
+            else self.pill_response
         )
 
-    def check_user(self):
+    def check_user_reg(self):
         patient = get_patient_by_chat_id(self.chat_id)
         patronage = get_patronage_by_chat_id(self.chat_id)
         # TODO добавить проверку по патронажу
@@ -305,6 +311,9 @@ class PatientUser(BasicUser):
         return True
 
     def check_user_records(self, context: CallbackContext):
+        # Если аларм у пользователя уже сработал, то заново не активируем
+        if self.alarmed:
+            return None
         Thread(target=self._thread_check_user_records, args=(context,)).start()
 
     def _thread_check_user_records(self, context: CallbackContext):
@@ -349,9 +358,7 @@ class PatronageUser(BasicUser):
         super().register()
 
     def _threading_reg(self, update: Update, context: CallbackContext):
-        add_patronage(
-            chat_id=self.chat_id
-        )
+        add_patronage(chat_id=self.chat_id)
 
     @staticmethod
     def send_alarm(context, **kwargs):

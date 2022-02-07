@@ -4,14 +4,13 @@ from telegram.ext import ConversationHandler, MessageHandler, Filters, \
     CommandHandler, CallbackQueryHandler, CallbackContext
 
 from modules.dialogs_shortcuts.start_shortcuts import \
-    END, CONF_TZ, CONF_NOTIFICATIONS, STOPPING
+    END, CONF_TZ, CONF_NOTIFICATIONS, STOPPING, START_OVER
 from modules.start_dialogs import ConfigureTZDialog, ConfigureNotifTimeDialog
 from tools.decorators import registered_patient
 
 # State
 SETTINGS_ACTION = 'SETTINGS_ACTION'
 # Constants
-SETTINGS_OVER = 'SETTINGS_OVER'
 DROP_NOTIF_TIME = 'DROP_NOTIF_TIME'
 CONFIRM = 'CONFIRM'
 
@@ -20,7 +19,7 @@ class SettingsDialog(ConversationHandler):
     def __init__(self):
         super().__init__(
             name=self.__class__.__name__,
-            entry_points=[MessageHandler(Filters.regex('^Настройки$'),
+            entry_points=[MessageHandler(Filters.regex('Настройки$'),
                                          self.start)],
             states={
                 SETTINGS_ACTION: [
@@ -72,28 +71,28 @@ class SettingsDialog(ConversationHandler):
         ]
         keyboard = InlineKeyboardMarkup(buttons)
 
-        if context.user_data.get(SETTINGS_OVER):
+        if context.user_data.get(START_OVER):
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text,
                                                     reply_markup=keyboard)
         else:
             msg = update.message.reply_text(text=text, reply_markup=keyboard)
             context.chat_data['st_msg'] = msg
-        context.user_data[SETTINGS_OVER] = False
+        context.user_data[START_OVER] = False
         return SETTINGS_ACTION
 
     @staticmethod
     def drop_notif_time(update: Update, context: CallbackContext):
         res = context.user_data['user'].drop_notif_time()
         if res:
-            context.user_data[SETTINGS_OVER] = True
+            context.user_data[START_OVER] = True
             return SettingsDialog.start(update, context)
 
     @staticmethod
     def confirm(update: Update, context: CallbackContext):
         update.callback_query.delete_message()
-        keyboard = ReplyKeyboardMarkup(
-            [['Справка', 'Настройки']], row_width=1, resize_keyboard=True)
+        keyboard = ReplyKeyboardMarkup([['❔Справка', '⚙️Настройки']],
+                                       row_width=1, resize_keyboard=True)
         try:
             context.user_data['user'].save_updating(context)
             text = 'Изменения сохранены.'
@@ -114,8 +113,8 @@ class SettingsDialog(ConversationHandler):
 
         text = "Изменения не были сохранеы."
 
-        keyboard = ReplyKeyboardMarkup(
-            [['Справка', 'Настройки']], row_width=1, resize_keyboard=True)
+        keyboard = ReplyKeyboardMarkup([['❔Справка', '⚙️Настройки']],
+                                       row_width=1, resize_keyboard=True)
 
         if update.callback_query:
             update.callback_query.delete_message()
@@ -151,7 +150,7 @@ class SettingsConfNotifTimeDialog(ConfigureNotifTimeDialog):
 
     @staticmethod
     def back(update: Update, context: CallbackContext):
-        context.user_data[SETTINGS_OVER] = True
+        context.user_data[START_OVER] = True
         SettingsDialog.start(update, context)
         return END
 
@@ -172,6 +171,6 @@ class SettingsConfTZDialog(ConfigureTZDialog):
 
     @staticmethod
     def back(update: Update, context: CallbackContext):
-        context.user_data[SETTINGS_OVER] = True
+        context.user_data[START_OVER] = True
         SettingsDialog.start(update, context)
         return END

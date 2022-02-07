@@ -70,7 +70,7 @@ def main():
                                         pattern='^RESTORE_PATRONAGE$'))
 
     dp.add_handler(CommandHandler("help", help_msg))
-    dp.add_handler(MessageHandler(Filters.regex('^Справка$'), help_msg))
+    dp.add_handler(MessageHandler(Filters.regex('Справка$'), help_msg))
 
     dp.add_handler(MessageHandler(Filters.command, unknown))
     dp.add_handler(MessageHandler(Filters.text, echo))

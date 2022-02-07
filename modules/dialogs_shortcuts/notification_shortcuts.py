@@ -19,10 +19,3 @@ END = ConversationHandler.END
     CONFIRM_PILL_TAKING,
     CANT_PILL_TAKING,
 ) = map(chr, range(100 + 4, 100 + 7))
-
-(
-    # Constants
-    PILL_TAKING_OVER,
-    DATA_COLLECT_OVER
-) = map(chr, range(100 + 7, 100 + 9))
-

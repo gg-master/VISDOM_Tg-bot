@@ -6,6 +6,7 @@ from telegram.ext import CallbackQueryHandler, \
 
 from modules.timer import remove_job_if_exists, deleting_pre_start_msg_task
 from modules.dialogs_shortcuts.notification_shortcuts import *
+from modules.dialogs_shortcuts.start_shortcuts import START_OVER
 from tools.decorators import registered_patient
 
 
@@ -66,8 +67,7 @@ class PillTakingDialog(ConversationHandler):
     @registered_patient
     def start(update: Update, context: CallbackContext):
         # Получаем пользователя из задачи
-        user = context.job_queue.get_jobs_by_name(
-            f'{context.user_data["user"].chat_id}-rep_task')[0].context['user']
+        user = context.user_data['user']
 
         response = context.user_data['user'].pill_response
 
@@ -94,7 +94,7 @@ class PillTakingDialog(ConversationHandler):
         ]
         keyboard = InlineKeyboardMarkup(buttons)
 
-        if not context.user_data.get(PILL_TAKING_OVER):
+        if not context.user_data.get(START_OVER):
             update.callback_query.answer()
             msg = update.callback_query.edit_message_text(
                 text=text, reply_markup=keyboard)
@@ -116,7 +116,7 @@ class PillTakingDialog(ConversationHandler):
 
         user.msg_to_del = user.active_dialog_msg = msg
 
-        context.user_data[PILL_TAKING_OVER] = False
+        context.user_data[START_OVER] = False
         return PILL_TAKING_ACTION
 
     @staticmethod
@@ -138,7 +138,7 @@ class PillTakingDialog(ConversationHandler):
         """Сохранение пользовательского ответа"""
         context.user_data['user'].pill_response = \
             f'Я не могу принять лекарство. Причина: {update.message.text}'
-        context.user_data[PILL_TAKING_OVER] = True
+        context.user_data[START_OVER] = True
         return PillTakingDialog.start(update, context)
 
     @staticmethod
@@ -150,9 +150,7 @@ class PillTakingDialog(ConversationHandler):
         update.callback_query.edit_message_text(text=text)
 
         # Переключаем индекс диалога у пользователя из задачи.
-        user = context.job_queue.get_jobs_by_name(
-            f'{context.user_data["user"].chat_id}'
-            f'-rep_task')[0].context['user']
+        user = context.user_data['user']
         user.next_curr_state_index()
 
         # Запускаем второй диалог
@@ -162,8 +160,7 @@ class PillTakingDialog(ConversationHandler):
 
     @staticmethod
     def stop(update: Update, context: CallbackContext):
-        user = context.job_queue.get_jobs_by_name(
-            f'{context.user_data["user"].chat_id}-rep_task')[0].context['user']
+        user = context.user_data['user']
         # Если сообщение еще не обновилось
         if not user.is_msg_updated():
             # Если пользователь ввел команду /stop, диалог останавливается.
@@ -217,8 +214,7 @@ class DataCollectionDialog(ConversationHandler):
     @registered_patient
     def start(update: Update, context: CallbackContext):
         # Получаем пользователя из задачи
-        user = context.job_queue.get_jobs_by_name(
-            f'{context.user_data["user"].chat_id}-rep_task')[0].context['user']
+        user = context.user_data['user']
 
         # Получаем ответ пользователя из контекста
         response = context.user_data['user'].data_response
@@ -254,7 +250,7 @@ class DataCollectionDialog(ConversationHandler):
                  if not heart else 'Изменить ЧСС', callback_data=f'HEART')],
             ]
         )
-        if not context.user_data.get(DATA_COLLECT_OVER):
+        if not context.user_data.get(START_OVER):
             update.callback_query.answer()
             msg = update.callback_query.edit_message_text(
                 text=text, reply_markup=keyboard)
@@ -274,7 +270,7 @@ class DataCollectionDialog(ConversationHandler):
 
         user.msg_to_del = user.active_dialog_msg = msg
 
-        context.user_data[DATA_COLLECT_OVER] = False
+        context.user_data[START_OVER] = False
         return DATA_COLLECT_ACTION
 
     @staticmethod
@@ -290,12 +286,12 @@ class DataCollectionDialog(ConversationHandler):
             text = 'Введите значение диастолического АД (ДАД)'
         else:
             text = 'Введите значение частоты сердечных сокращений (ЧСС)'
-        if not context.user_data[DATA_COLLECT_OVER]:
+        if not context.user_data[START_OVER]:
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text)
         else:
             update.effective_chat.send_message(text=text)
-        context.user_data[DATA_COLLECT_OVER] = False
+        context.user_data[START_OVER] = False
         return TYPING
 
     @staticmethod
@@ -306,11 +302,11 @@ class DataCollectionDialog(ConversationHandler):
             context.user_data['user'].data_response[
                 context.user_data['val'].lower()] = inp
 
-            context.user_data[DATA_COLLECT_OVER] = True
+            context.user_data[START_OVER] = True
             return DataCollectionDialog.start(update, context)
         text = 'Данные были введены в неправильном формате.\nПопробуйте снова.'
         update.message.reply_text(text=text)
-        context.user_data[DATA_COLLECT_OVER] = True
+        context.user_data[START_OVER] = True
         return DataCollectionDialog.input_req(update, context)
 
     @staticmethod
@@ -330,18 +326,15 @@ class DataCollectionDialog(ConversationHandler):
         update.callback_query.edit_message_text(text=text)
 
         # Удаляем повторяющийся таск
-        remove_job_if_exists(
-            f'{context.user_data["user"].chat_id}-rep_task', context)
+        remove_job_if_exists(f'{user.chat_id}-rep_task', context)
 
         # Удаляем таск удаления pre-start сообщения
-        remove_job_if_exists(
-            f'{context.user_data["user"].chat_id}-pre_start_msg', context)
+        remove_job_if_exists(f'{user.chat_id}-pre_start_msg', context)
         return END
 
     @staticmethod
     def stop(update: Update, context: CallbackContext):
-        user = context.job_queue.get_jobs_by_name(
-            f'{context.user_data["user"].chat_id}-rep_task')[0].context['user']
+        user = context.user_data['user']
         # Если сообщение еще не обновилось
         if not user.is_msg_updated():
             context.bot.delete_message(update.effective_chat.id,

@@ -39,15 +39,12 @@ END = ConversationHandler.END
     STOPPING,
     # Other constants
     START_OVER,
-    LOCATION_OVER,
-    REGISTRATION_OVER,
-    CONF_TZ_OVER,
     FINISH_REGISTRATION,
-) = map(chr, range(13, 19))
+) = map(chr, range(13, 16))
 
 
 (
     PATRONAGE_REGISTRATION_ACTION,
     TYPING_TOKEN,
     SEND_USER_DATA_PAT,
-) = map(chr, range(19, 22))
+) = map(chr, range(16, 19))

@@ -7,6 +7,7 @@ from telegram.ext import CallbackContext
 from db_api import get_accept_times_by_patient_id, get_all_patients, \
     get_patient_by_chat_id, get_all_patronages
 from tools.decorators import not_registered_users
+from modules.patient_list import patient_list
 
 
 class Restore:
@@ -33,13 +34,14 @@ class Restore:
             times={'MOR': accept_times[0].time, 'EVE': accept_times[1].time},
             accept_times={'MOR': accept_times[0].id, 'EVE': accept_times[1].id}
         )
-
+        patient_list[p.chat_id] = p
         # Восстановление обычных Daily тасков
         p.recreate_notification(self.context)
 
         # Восстановление цикличных тасков. Если для них соответствует время
         p.restore_repeating_task(self.context)
 
+        # Проверяем пациента на время последней записи
         p.check_user_records(self.context)
 
         logging.info(f'RESTORED PATIENT NOTIFICATIONS: {p.chat_id}')
@@ -80,20 +82,12 @@ class Restore:
 
 @not_registered_users
 def patient_restore_handler(update: Update, context: CallbackContext):
-    from modules.users_classes import PatientUser
     from modules.start_dialogs import PatientRegistrationDialog
 
-    p = get_patient_by_chat_id(update.effective_chat.id)
-    accept_times = get_accept_times_by_patient_id(p.id)
+    # Устанавливаем в контекст ранее созданный объект пациента
+    user = context.user_data['user'] = patient_list[update.effective_chat.id]
 
-    user = context.user_data['user'] = PatientUser(update.effective_chat.id)
-    user.restore(
-        times={'MOR': accept_times[0].time, 'EVE': accept_times[1].time},
-        tz_str=p.time_zone,
-        accept_times={'MOR': accept_times[0].id,
-                      'EVE': accept_times[1].id}
-    )
-    logging.info(f'RESTORED PATIENT: {p.chat_id}')
+    logging.info(f'RESTORED PATIENT: {user.chat_id}')
     update.callback_query.delete_message()
     update.effective_chat.send_message(
         'Доступ восстановлен. Теперь Вы можете добавить ответ на уведомления, '
@@ -109,13 +103,13 @@ def patient_restore_handler(update: Update, context: CallbackContext):
         # Получаем id сообщения из таска, который автоматически удалит
         # сообщение через некоторое время
         msg_id = pre_start_msg[0].context['msg_id']
-        context.bot.delete_message(p.chat_id, msg_id)
+        context.bot.delete_message(user.chat_id, msg_id)
 
         # Снова отображаем удаленное уведомление
         user.notification_states[user.state()[0]][
             user.state()[1]].pre_start(
             context, context.job_queue.get_jobs_by_name(
-                f'{p.chat_id}-rep_task')[0].context)
+                f'{user.chat_id}-rep_task')[0].context)
 
 
 @not_registered_users
