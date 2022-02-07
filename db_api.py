@@ -1,13 +1,11 @@
+import openpyxl
+
 from data import db_session
 from data.patient import Patient
 from data.patronage import Patronage
 from data.accept_time import AcceptTime
 from data.record import Record
 from typing import Any
-import pandas as pd
-import xlsxwriter
-import openpyxl
-import csv
 
 
 db_session.global_init()
@@ -37,8 +35,8 @@ def add_patient(time_morn, time_even, **kwargs: Any):
         patient = Patient(**kwargs)
         db_sess.add(patient)
         db_sess.commit()
-        return {'MOR': add_accept_time(time_morn, patient),
-                'EVE': add_accept_time(time_even, patient)}
+    return {'MOR': add_accept_time(time_morn, patient),
+            'EVE': add_accept_time(time_even, patient)}
 
 
 def get_patient_by_chat_id(chat_id: int) -> Patient:
@@ -65,6 +63,7 @@ def del_patient(id):
             db_sess.delete(accept_time)
         db_sess.delete(patient)
         db_sess.commit()
+
 
 def change_patients_time_zone(chat_id: int, time_zone: int) -> None:
     with db_session.create_session() as db_sess:
@@ -108,7 +107,7 @@ def get_patronage_by_chat_id(chat_id: int) -> Patronage:
                                                == chat_id).first()
 
 
-def add_record(accept_time, **kwargs: Any) -> None:
+def add_record(**kwargs: Any) -> None:
     with db_session.create_session() as db_sess:
         record = Record(**kwargs)
         db_sess.add(record)
@@ -117,12 +116,12 @@ def add_record(accept_time, **kwargs: Any) -> None:
 
 def get_last_record_by_accept_time(accept_time_id):
     with db_session.create_session() as db_sess:
-        last_record = db_sess.query(Record).filter(
+        records = db_sess.query(Record).filter(
             Record.accept_time_id == accept_time_id).all()
-        return last_record
+        return records
 
 
-def make_file_by_patient(user_code):
+def make_file_by_patient_user_code(user_code):
     with db_session.create_session() as db_sess:
         records = db_sess.execute(f"""SELECT record.sys_press,
                   record.dias_press, record.heart_rate, record.time,

@@ -9,10 +9,8 @@ from tools.tools import get_from_env
 
 from modules.dialogs_shortcuts.start_shortcuts import (
     PATIENT_REGISTRATION_ACTION,
-    CONF_TZ_OVER,
     CONF_LOCATION,
-    REGISTRATION_OVER,
-    LOCATION_OVER,
+    START_OVER,
     STOPPING,
     END,
 )
@@ -103,7 +101,7 @@ class FindLocationDialog(ConversationHandler):
             ],
             row_width=1, resize_keyboard=True, one_time_keyboard=True)
 
-        if not context.user_data.get(LOCATION_OVER):
+        if not context.user_data.get(START_OVER):
             update.callback_query.answer()
             update.callback_query.delete_message()
             if context.chat_data.get('st_msg'):
@@ -114,7 +112,7 @@ class FindLocationDialog(ConversationHandler):
             text='Выберите способ добавления местоположения',
             reply_markup=kboard)
 
-        context.user_data[LOCATION_OVER] = False
+        context.user_data[START_OVER] = False
         return 1
 
     @staticmethod
@@ -155,12 +153,12 @@ class FindLocationDialog(ConversationHandler):
         location = update.message.location
 
         if response and 'Нет, неверно' in response:
-            context.user_data[LOCATION_OVER] = True
+            context.user_data[START_OVER] = True
             return FindLocationDialog.start(update, context)
 
         elif (response and 'Да, верно' in response) or location:
             # Returning to second level patient registration conv.
-            context.user_data[REGISTRATION_OVER] = True
+            context.user_data[START_OVER] = True
 
             if location:
                 context.user_data['user'].location = Location(
@@ -173,13 +171,12 @@ class FindLocationDialog(ConversationHandler):
     @staticmethod
     def back_to_prev_level(update: Update, context: CallbackContext):
         # Переход на предыдущий уровень в диалоге
+        context.user_data[START_OVER] = True
         if not context.user_data['user'].registered():
             from modules.start_dialogs import ConfigureTZDialog
-            context.user_data[CONF_TZ_OVER] = True
             ConfigureTZDialog.start(update, context)
         else:
             from modules.settings_dialogs import SettingsConfTZDialog
-            context.user_data[CONF_TZ_OVER] = True
             SettingsConfTZDialog.start(update, context)
         return END
 

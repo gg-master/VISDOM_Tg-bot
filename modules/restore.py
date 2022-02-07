@@ -7,6 +7,7 @@ from telegram.ext import CallbackContext
 from db_api import get_accept_times_by_patient_id, get_all_patients, \
     get_patient_by_chat_id, get_all_patronages
 from tools.decorators import not_registered_users
+from modules.patient_list import patient_list
 
 
 class Restore:
@@ -20,36 +21,38 @@ class Restore:
         self.restore_patronage(self.context)
 
     def restore_all_patients(self):
-        patients = get_all_patients()
-        for patient in patients:
-            if patient.chat_id != 394 and patient.member:
-                accept_times = get_accept_times_by_patient_id(patient.id)
-                self.restore_patient(patient, accept_times)
+        for patient in filter(lambda x: x.member, get_all_patients()):
+            accept_times = get_accept_times_by_patient_id(patient.id)
+            self.restore_patient(patient, accept_times)
 
     def restore_patient(self, patient, accept_times):
         from modules.users_classes import PatientUser
 
-        times = {'MOR': accept_times[0].time, 'EVE': accept_times[1].time}
         p = PatientUser(patient.chat_id)
-        p.restore(times, patient.time_zone)
-
+        p.restore(
+            code=patient.user_code,
+            tz_str=patient.time_zone,
+            times={'MOR': accept_times[0].time, 'EVE': accept_times[1].time},
+            accept_times={'MOR': accept_times[0].id, 'EVE': accept_times[1].id}
+        )
+        patient_list[p.chat_id] = p
         # Восстановление обычных Daily тасков
         p.recreate_notification(self.context)
 
         # Восстановление цикличных тасков. Если для них соответствует время
-        if not self.context.job_queue.get_jobs_by_name(
-                f'{p.chat_id}-rep_task'):
-            p.restore_repeating_task(self.context)
+        p.restore_repeating_task(self.context)
+
+        # Проверяем пациента на время последней записи
+        p.check_user_records(self.context)
 
         logging.info(f'RESTORED PATIENT NOTIFICATIONS: {p.chat_id}')
         Restore.restore_patient_msg(self.context, chat_id=patient.chat_id)
 
     @staticmethod
     def restore_patronage(context):
-        patronages = get_all_patronages()
-        if patronages:
-            Restore.restore_patronage_msg(context,
-                                          chat_id=patronages[0].chat_id)
+        patrs = get_all_patronages()
+        if patrs:
+            Restore.restore_patronage_msg(context, chat_id=patrs[0].chat_id)
 
     @staticmethod
     def restore_patient_msg(context, **kwargs):
@@ -58,13 +61,10 @@ class Restore:
                'Уведомления были востановлены.\n' \
                'Чтобы получить доступ к основным функциям нажмите ' \
                '"Восстановить доступ"'
-        buttons = [
-            [InlineKeyboardButton(text='Восстановить доступ',
-                                  callback_data=f'RESTORE_PATIENT')],
-        ]
-        keyboard = InlineKeyboardMarkup(buttons)
-        context.bot.send_message(
-            kwargs['chat_id'], text=text, reply_markup=keyboard)
+        buttons = [[InlineKeyboardButton(text='Восстановить доступ',
+                                         callback_data=f'RESTORE_PATIENT')]]
+        kb = InlineKeyboardMarkup(buttons)
+        context.bot.send_message(kwargs['chat_id'], text=text, reply_markup=kb)
 
     @staticmethod
     def restore_patronage_msg(context, **kwargs):
@@ -83,26 +83,34 @@ class Restore:
 
 @not_registered_users
 def patient_restore_handler(update: Update, context: CallbackContext):
-    from modules.users_classes import PatientUser
     from modules.start_dialogs import PatientRegistrationDialog
 
-    p = get_patient_by_chat_id(update.effective_chat.id)
-    accept_times = get_accept_times_by_patient_id(p.id)
+    # Устанавливаем в контекст ранее созданный объект пациента
+    user = context.user_data['user'] = patient_list[update.effective_chat.id]
 
-    context.user_data['user'] = PatientUser(update.effective_chat.id)
-    context.user_data['user'].restore(
-        times={'MOR': accept_times[0].time, 'EVE': accept_times[1].time},
-        tz_str=p.time_zone,
-        accept_times={'MOR': accept_times[0].id,
-                      'EVE': accept_times[1].id}
-    )
-
-    logging.info(f'RESTORED PATIENT: {p.chat_id}')
+    logging.info(f'RESTORED PATIENT: {user.chat_id}')
     update.callback_query.delete_message()
     update.effective_chat.send_message(
         'Доступ восстановлен. Теперь Вы можете добавить ответ на уведомления, '
         'к которым не было доступа.')
     PatientRegistrationDialog.restore_main_msg(update, context)
+
+    # Если уже пришло уведомление, то переотправляем его после восстановления
+    pre_start_msg = context.job_queue.get_jobs_by_name(
+        f'{user.chat_id}-pre_start_msg')
+
+    # Если уже установлено событие на удаление уведомления
+    if pre_start_msg:
+        # Получаем id сообщения из таска, который автоматически удалит
+        # сообщение через некоторое время
+        msg_id = pre_start_msg[0].context['msg_id']
+        context.bot.delete_message(user.chat_id, msg_id)
+
+        # Снова отображаем удаленное уведомление
+        user.notification_states[user.state()[0]][
+            user.state()[1]].pre_start(
+            context, context.job_queue.get_jobs_by_name(
+                f'{user.chat_id}-rep_task')[0].context)
 
 
 @not_registered_users
@@ -114,6 +122,5 @@ def patronage_restore_handler(update: Update, context: CallbackContext):
     p.restore(context)
     logging.info(f'RESTORED PATRONAGE: {p.chat_id}')
     update.callback_query.delete_message()
-    update.effective_chat.send_message(
-        'Доступ восстановлен.')
+    update.effective_chat.send_message('Доступ восстановлен.')
     PatronageJob.default_job(update, context)

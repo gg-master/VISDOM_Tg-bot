@@ -72,7 +72,8 @@ class StartDialog(ConversationHandler):
 
     @staticmethod
     def stop(update: Update, context: CallbackContext):
-        keyboard = ReplyKeyboardMarkup([['/start']])
+        keyboard = ReplyKeyboardMarkup([['/start']],
+                                       row_width=1, resize_keyboard=True)
         update.message.reply_text(text='Регистрация прервана.\nЧтобы повторно '
                                        'начать регистрацию отправьте:\n/start',
                                   reply_markup=keyboard)
@@ -118,9 +119,10 @@ class PatientRegistrationDialog(ConversationHandler):
 
     @staticmethod
     def pre_start(update: Update, context: CallbackContext):
-        if type(context.user_data['user']) is BasicUser:
+        user = context.user_data['user']
+        if type(user) is BasicUser:
             context.user_data['user'] = PatientUser(update.effective_chat.id)
-        res = context.user_data['user'].check_user()
+        res = context.user_data['user'].check_user_reg()
         if not res:
             return PatientRegistrationDialog.cant_registered(
                 update, context, res)
@@ -159,14 +161,14 @@ class PatientRegistrationDialog(ConversationHandler):
         ]
         keyboard = InlineKeyboardMarkup(buttons)
 
-        if not context.user_data.get(REGISTRATION_OVER):
+        if not context.user_data.get(START_OVER):
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text,
                                                     reply_markup=keyboard)
         else:
             update.message.reply_text(text=text, reply_markup=keyboard)
 
-        context.user_data[REGISTRATION_OVER] = False
+        context.user_data[START_OVER] = False
         return PATIENT_REGISTRATION_ACTION
 
     @staticmethod
@@ -179,7 +181,7 @@ class PatientRegistrationDialog(ConversationHandler):
     @staticmethod
     def save_code(update: Update, context: CallbackContext):
         context.user_data['user'].code = update.message.text
-        context.user_data[REGISTRATION_OVER] = True
+        context.user_data[START_OVER] = True
         return PatientRegistrationDialog.start(update, context)
 
     @staticmethod
@@ -197,7 +199,7 @@ class PatientRegistrationDialog(ConversationHandler):
         update.callback_query.answer()
         update.callback_query.delete_message()
 
-        keyboard = ReplyKeyboardMarkup([['Справка', 'Настройки']],
+        keyboard = ReplyKeyboardMarkup([['❔Справка', '⚙️Настройки']],
                                        row_width=1, resize_keyboard=True)
 
         msg = context.bot.send_message(
@@ -235,7 +237,7 @@ class PatientRegistrationDialog(ConversationHandler):
                f"напомнит о необходимости измерить и сообщить " \
                f"артериальное давление и частоту сердечных сокращений еще раз"
 
-        keyboard = ReplyKeyboardMarkup([['Справка', 'Настройки']],
+        keyboard = ReplyKeyboardMarkup([['❔Справка', '⚙️Настройки']],
                                        row_width=1, resize_keyboard=True)
 
         msg = context.bot.send_message(
@@ -300,26 +302,26 @@ class ConfigureTZDialog(ConversationHandler):
         ]
         keyboard = InlineKeyboardMarkup(buttons)
 
-        if not context.user_data.get(CONF_TZ_OVER):
+        if not context.user_data.get(START_OVER):
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text,
                                                     reply_markup=keyboard)
         else:
             update.message.reply_text(text=text, reply_markup=keyboard)
 
-        context.user_data[CONF_TZ_OVER] = False
+        context.user_data[START_OVER] = False
         return CONF_TZ_ACTION
 
     @staticmethod
     def conf_tz(update: Update, context: CallbackContext):
         text = 'Введите Ваш часовой пояс в следующем формате:\n ' \
                '+(-){Ваш часовой пояс}\nПример: +3'
-        if not context.user_data.get(CONF_TZ_OVER):
+        if not context.user_data.get(START_OVER):
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text)
         else:
             update.message.reply_text(text=text)
-        context.user_data[CONF_TZ_OVER] = False
+        context.user_data[START_OVER] = False
         return TYPING_TZ
 
     @staticmethod
@@ -329,18 +331,18 @@ class ConfigureTZDialog(ConversationHandler):
         try:
             context.user_data['user'].location = Location(tz=msg)
 
-            context.user_data[REGISTRATION_OVER] = True
+            context.user_data[START_OVER] = True
 
             if not ret:
                 return ConfigureTZDialog.back(update, context)
             return ret(update, context)
         except ValueError:
-            context.user_data[CONF_TZ_OVER] = True
+            context.user_data[START_OVER] = True
             text = 'Часовой пояс был введен в неправильном формате. ' \
                    'Попробуйте снова.'
             update.message.reply_text(text=text)
 
-            context.user_data[CONF_TZ_OVER] = True
+            context.user_data[START_OVER] = True
             return ConfigureTZDialog.conf_tz(update, context)
 
     @staticmethod

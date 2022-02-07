@@ -39,12 +39,10 @@ def help_msg(update: Update, context: CallbackContext):
 
 
 def echo(update: Update, context: CallbackContext):
+    import pytz
     date = update.message.date
-    print(date, end=' - ')
-    print(date.hour, date.tzinfo)
-    print(update.message.location)
-    print(update.message.chat_id, '-', update.effective_user.id, '-',
-          update.effective_chat.id)
+    tz = pytz.timezone('Etc/Gmt-3')
+    print(tz.normalize(date), '\n', date.astimezone(tz))
     update.message.reply_text(update.message.text)
 
 
@@ -72,7 +70,7 @@ def main():
                                         pattern='^RESTORE_PATRONAGE$'))
 
     dp.add_handler(CommandHandler("help", help_msg))
-    dp.add_handler(MessageHandler(Filters.regex('^Справка$'), help_msg))
+    dp.add_handler(MessageHandler(Filters.regex('Справка$'), help_msg))
 
     dp.add_handler(MessageHandler(Filters.command, unknown))
     dp.add_handler(MessageHandler(Filters.text, echo))

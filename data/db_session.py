@@ -27,7 +27,7 @@ def global_init():
     # print(f"Подключение к базе данных по адресу {conn_str}")
     logging.info(f"Подключение к базе данных по адресу {conn_str}")
     engine = sa.create_engine(conn_str, echo=False, poolclass=NullPool)
-    __factory = orm.sessionmaker(bind=engine)
+    __factory = orm.sessionmaker(bind=engine, expire_on_commit=False)
 
     from . import __all_models
 

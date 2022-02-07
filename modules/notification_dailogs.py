@@ -1,14 +1,13 @@
 import datetime as dt
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ConversationHandler, CallbackQueryHandler, \
-    CallbackContext, CommandHandler, MessageHandler, Filters, \
-    DispatcherHandlerStop
+from telegram.ext import CallbackQueryHandler, \
+    CallbackContext, CommandHandler, MessageHandler, Filters
 
-from modules.timer import remove_job_if_exists
-from tools.decorators import registered_patient
+from modules.timer import remove_job_if_exists, deleting_pre_start_msg_task
 from modules.dialogs_shortcuts.notification_shortcuts import *
-from db_api import add_record
+from modules.dialogs_shortcuts.start_shortcuts import START_OVER
+from tools.decorators import registered_patient
 
 
 class PillTakingDialog(ConversationHandler):
@@ -33,12 +32,14 @@ class PillTakingDialog(ConversationHandler):
             },
             fallbacks=[CommandHandler('stop', self.stop),
                        CallbackQueryHandler(self.start,
-                                            pattern=f'^{PILL_TAKING}$')
-                       ]
+                                            pattern=f'^{PILL_TAKING}$')]
         )
 
     @staticmethod
     def pre_start(context: CallbackContext, data, text=None, buttons=None):
+        # Получаем пользователя из задачи
+        user = data['user']
+
         text = 'Доброе утро! Примите, пожалуйста, лекарство!\n' \
                'Нажмите "Добавить ответ", чтобы мы могли зафиксировать ваши ' \
                'действия.' if not text else text
@@ -49,18 +50,26 @@ class PillTakingDialog(ConversationHandler):
 
         keyboard = InlineKeyboardMarkup(buttons)
 
-        msg = context.bot.send_message(data['user'].chat_id,
-                                       text=text,
+        msg = context.bot.send_message(user.chat_id, text=text,
                                        reply_markup=keyboard)
-        user = context.job.context['user'] if context.job \
-            else context.user_data['user']
         user.msg_to_del = msg
+
+        # Само-удаление сообщения с возможностью добавить ответ на уведомление
+        remove_job_if_exists(f'{user.chat_id}-pre_start_msg', context)
+        context.job_queue.run_once(
+            callback=deleting_pre_start_msg_task,
+            when=dt.timedelta(hours=1, minutes=30),
+            context={'user': user, 'msg_id': msg.message_id},
+            name=f'{user.chat_id}-pre_start_msg'
+        )
 
     @staticmethod
     @registered_patient
     def start(update: Update, context: CallbackContext):
+        # Получаем пользователя из задачи
         user = context.user_data['user']
-        response = user.pill_response
+
+        response = context.user_data['user'].pill_response
 
         if not response:
             text = 'Доброе утро! Примите, пожалуйста, лекарство!\n\n' \
@@ -85,7 +94,7 @@ class PillTakingDialog(ConversationHandler):
         ]
         keyboard = InlineKeyboardMarkup(buttons)
 
-        if not context.user_data.get(PILL_TAKING_OVER):
+        if not context.user_data.get(START_OVER):
             update.callback_query.answer()
             msg = update.callback_query.edit_message_text(
                 text=text, reply_markup=keyboard)
@@ -107,7 +116,7 @@ class PillTakingDialog(ConversationHandler):
 
         user.msg_to_del = user.active_dialog_msg = msg
 
-        context.user_data[PILL_TAKING_OVER] = False
+        context.user_data[START_OVER] = False
         return PILL_TAKING_ACTION
 
     @staticmethod
@@ -120,17 +129,28 @@ class PillTakingDialog(ConversationHandler):
     def reason(update: Update, context: CallbackContext):
         """Запрашивает у пользователя причину"""
         text = "Опишите вашу причину"
-        update.callback_query.answer()
-        update.callback_query.edit_message_text(text=text)
+        if not context.user_data[START_OVER]:
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(text=text)
+        else:
+            update.effective_chat.send_message(text=text)
+            context.user_data[START_OVER] = False
         return TYPING
 
     @staticmethod
     def save_reason(update: Update, context: CallbackContext):
         """Сохранение пользовательского ответа"""
-        context.user_data['user'].pill_response = \
-            f'Я не могу принять лекарство. Причина: {update.message.text}'
-        context.user_data[PILL_TAKING_OVER] = True
-        return PillTakingDialog.start(update, context)
+        resp = update.message.text
+
+        context.user_data[START_OVER] = True
+        if len(resp) <= 100:
+            context.user_data['user'].pill_response = \
+                f'Я не могу принять лекарство. Причина: {update.message.text}'
+            return PillTakingDialog.start(update, context)
+        text = 'Ваш ответ слишком длинный.' \
+               '\nВозможное количество символов: 100'
+        update.message.reply_text(text=text)
+        return PillTakingDialog.reason(update, context)
 
     @staticmethod
     def end(update: Update, context: CallbackContext):
@@ -140,12 +160,12 @@ class PillTakingDialog(ConversationHandler):
         update.callback_query.answer()
         update.callback_query.edit_message_text(text=text)
 
-        # Переключаем индекс диалога у пользователя.
-        context.user_data['user'].next_curr_state_index()
+        # Переключаем индекс диалога у пользователя из задачи.
+        user = context.user_data['user']
+        user.next_curr_state_index()
 
         # Запускаем второй диалог
-        DataCollectionDialog.pre_start(
-            context, data={'user': context.user_data['user']})
+        DataCollectionDialog.pre_start(context, data={'user': user})
 
         return END
 
@@ -204,8 +224,11 @@ class DataCollectionDialog(ConversationHandler):
     @staticmethod
     @registered_patient
     def start(update: Update, context: CallbackContext):
+        # Получаем пользователя из задачи
         user = context.user_data['user']
-        response = user.data_response
+
+        # Получаем ответ пользователя из контекста
+        response = context.user_data['user'].data_response
 
         state_name = user.state()[0]
         text = 'Добрый вечер!' if not state_name == 'MOR' else 'Доброе утро!'
@@ -222,8 +245,8 @@ class DataCollectionDialog(ConversationHandler):
         if any(response.values()):
             text += f'\nВаши данные:'
             text += ("\nСАД: " + str(sys)) if sys else ''
-            text += ("\nДАД: " + str(dias)) if sys else ''
-            text += ("\nЧСС: " + str(heart)) if sys else ''
+            text += ("\nДАД: " + str(dias)) if dias else ''
+            text += ("\nЧСС: " + str(heart)) if heart else ''
 
         keyboard = InlineKeyboardMarkup(
             [
@@ -238,7 +261,7 @@ class DataCollectionDialog(ConversationHandler):
                  if not heart else 'Изменить ЧСС', callback_data=f'HEART')],
             ]
         )
-        if not context.user_data.get(DATA_COLLECT_OVER):
+        if not context.user_data.get(START_OVER):
             update.callback_query.answer()
             msg = update.callback_query.edit_message_text(
                 text=text, reply_markup=keyboard)
@@ -258,13 +281,14 @@ class DataCollectionDialog(ConversationHandler):
 
         user.msg_to_del = user.active_dialog_msg = msg
 
-        context.user_data[DATA_COLLECT_OVER] = False
+        context.user_data[START_OVER] = False
         return DATA_COLLECT_ACTION
 
     @staticmethod
     def input_req(update: Update, context: CallbackContext):
         """Запрос у пользователя ввода данных"""
-        val = update.callback_query.data
+        val = update.callback_query.data \
+            if update.callback_query else context.user_data['val']
         context.user_data['val'] = val
 
         if val == 'SYS':
@@ -273,36 +297,38 @@ class DataCollectionDialog(ConversationHandler):
             text = 'Введите значение диастолического АД (ДАД)'
         else:
             text = 'Введите значение частоты сердечных сокращений (ЧСС)'
-
-        update.callback_query.answer()
-        update.callback_query.edit_message_text(text=text)
+        if not context.user_data[START_OVER]:
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(text=text)
+        else:
+            update.effective_chat.send_message(text=text)
+        context.user_data[START_OVER] = False
         return TYPING
 
     @staticmethod
     def save_input(update: Update, context: CallbackContext):
         """Сохранение пользовательских данных"""
-        context.user_data['user'].data_response[
-            context.user_data['val'].lower()] = update.message.text
+        inp = update.message.text
+        if inp.isdigit():
+            context.user_data['user'].data_response[
+                context.user_data['val'].lower()] = inp
 
-        context.user_data[DATA_COLLECT_OVER] = True
-        return DataCollectionDialog.start(update, context)
+            context.user_data[START_OVER] = True
+            return DataCollectionDialog.start(update, context)
+        text = 'Данные были введены в неправильном формате.\nПопробуйте снова.'
+        update.message.reply_text(text=text)
+        context.user_data[START_OVER] = True
+        return DataCollectionDialog.input_req(update, context)
 
     @staticmethod
     def end(update: Update, context: CallbackContext):
-        # TODO перенести в поток добавление результатов
-        from modules.users_classes import PatientUser
-        print(context.user_data['user'].data_response)
-        user: PatientUser = context.user_data['user']
+        # Получаем пользователя из контекста
+        user = context.user_data['user']
 
-        add_record(
-            # time=dt.datetime.now(user.tz).time(),
-            time=user.times[user.state()[0]].time(),
-            sys_press=user.data_response['sys'],
-            dias_press=user.data_response['dias'],
-            heart_rate=user.data_response['heart'],
-            time_zone=user.tz.zone,
-            accept_time_id=user.accept_times[user.state()[0]]
-        )
+        # Сохраняем данные в бд
+        user.save_patient_record()
+
+        # Очищаем ответы для новых записей
         user.clear_responses()
 
         text = "Мы сохранили Ваш ответ. Спасибо!"
@@ -310,8 +336,11 @@ class DataCollectionDialog(ConversationHandler):
         update.callback_query.answer()
         update.callback_query.edit_message_text(text=text)
 
-        remove_job_if_exists(context.user_data['user'].rep_task_name, context)
-        context.user_data['user'].msg_to_del = None
+        # Удаляем повторяющийся таск
+        remove_job_if_exists(f'{user.chat_id}-rep_task', context)
+
+        # Удаляем таск удаления pre-start сообщения
+        remove_job_if_exists(f'{user.chat_id}-pre_start_msg', context)
         return END
 
     @staticmethod
@@ -322,6 +351,5 @@ class DataCollectionDialog(ConversationHandler):
             context.bot.delete_message(update.effective_chat.id,
                                        user.msg_to_del.message_id)
 
-            DataCollectionDialog.pre_start(
-                context, data={'user': context.user_data['user']})
+            DataCollectionDialog.pre_start(context, data={'user': user})
         return END
