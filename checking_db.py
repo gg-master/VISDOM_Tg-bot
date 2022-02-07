@@ -19,7 +19,15 @@ def main() -> None:
     # print(get_all_patients())
     # PatronageUser.make_file_patients()
     # make_file_patients()
-    create_session()
+    # create_session()
+    # get_all_patients_v2()
+    # patient = get_patient_by_chat_id(721698752)
+    # with db_session.create_session() as db:
+    #     print(patient.accept_time)
+    # with db_session.create_session() as db:
+    #     patient = db.query(Patient).filter(Patient.id == 34).first()
+    #     print(patient.accept_time)
+    make_file_by_patient('ASD')
 
 
 

@@ -5,6 +5,9 @@ from data.accept_time import AcceptTime
 from data.record import Record
 from typing import Any
 import pandas as pd
+import xlsxwriter
+import openpyxl
+import csv
 
 
 db_session.global_init()
@@ -119,46 +122,65 @@ def get_last_record_by_accept_time(accept_time_id):
         return last_record
 
 
-def make_file_by_patient(id):
+def make_file_by_patient(user_code):
     with db_session.create_session() as db_sess:
-        records = db_sess.query(Record).join(AcceptTime).join(
-            Patient).filter(Patient.id == id).all()
-        arr_sys_press, arr_dias_press, arr_heart_rate, arr_time, arr_time_zone, \
-        arr_id = [], [], [], [], [], []
-        for record in records:
-            arr_sys_press.append(record.sys_press)
-            arr_dias_press.append(record.dias_press)
-            arr_heart_rate.append(record.heart_rate)
-            arr_time.append(record.time)
-            arr_time_zone.append(record.time_zone)
-        df = pd.DataFrame({'Систолическое давление': arr_sys_press,
-                           'Диастолическое давление': arr_dias_press,
-                           'Частота сердечных сокращений': arr_heart_rate,
-                           'Время приема таблеток и измерений': arr_time,
-                           'Часовой пояс': arr_time_zone})
-        df.to_excel('static/' + str(id) + '.xlsx')
+        records = db_sess.execute(f"""SELECT record.sys_press,
+                  record.dias_press, record.heart_rate, record.time,
+                  record.time_zone, record.response_time, record.comment FROM
+                  patient JOIN accept_time on patient.id = 
+                  accept_time.Patient_id JOIN record on accept_time.id = 
+                  record.accept_time_id WHERE patient.user_code like 
+                  '{user_code}'""")
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    headers = ['Систолическое давление', 'Диастолическое давление',
+               'Частота сердечных сокращений',
+               'Время приема таблеток и измерений', 'Часовой пояс',
+               'Время ответа', 'Комментарий']
+    for i in range(len(headers)):
+        ws.cell(row=1, column=i + 1, value=headers[i])
+    i = 2
+    for record in records:
+        for j in range(7):
+            ws.cell(row=i, column=j + 1, value=record[j])
+        i += 1
+    wb.save(filename=f'static/{user_code}_data.xlsx')
 
 
 def make_file_patients():
-    arr_sys_press, arr_dias_press, arr_heart_rate, arr_time, arr_time_zone, \
-    arr_patient_user_code, arr_patient_id = [], [], [], [], [], [], []
-    # alias = Patient.query().join(AcceptTime,
-    #         Patient.id == AcceptTime.patient_id).join(Record, AcceptTime.record == Record.accept_time_id).all()
-    # print(alias)
-    # for record in records:
-    #     arr_patient_id.append(patient.id)
-    #     arr_patient_user_code.append(patient.user_code)
-    #     arr_sys_press.append(record.sys_press)
-    #     arr_dias_press.append(record.dias_press)
-    #     arr_heart_rate.append(record.heart_rate)
-    #     arr_time.append(record.time)
-    #     arr_time_zone.append(record.time_zone)
-    # df = DataFrame({'ID пациента': arr_patient_id,
-    #                 'Код пациента': arr_patient_user_code,
-    #                 'Систолическое давление': arr_sys_press,
-    #                 'Диастолическое давление': arr_dias_press,
-    #                 'Частота сердечных сокращений': arr_heart_rate,
-    #                 'Время приема таблеток и измерений': arr_time,
-    #                 'Часовой пояс': arr_time_zone})
-    # df.to_excel(f'static/statistics.xlsx')
+    with db_session.create_session() as db_sess:
+        records = db_sess.execute('SELECT patient.id, patient.user_code,'
+                                  ' record.sys_press, record.dias_press,'
+                                  ' record.heart_rate, record.time, record.'
+                                  'time_zone, record.response_time,'
+                                  ' record.comment FROM patient JOIN'
+                                  ' accept_time on patient.id = accept_time.'
+                                  'Patient_id JOIN record on accept_time.id'
+                                  ' = record.accept_time_id')
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    headers = ['ID пациента', 'Код пациента', 'Систолическое давление',
+               'Диастолическое давление', 'Частота сердечных сокращений',
+               'Время приема таблеток и измерений', 'Часовой пояс',
+               'Время ответа', 'Комментарий']
+    for i in range(len(headers)):
+        ws.cell(row=1, column=i + 1, value=headers[i])
+    i = 2
+    for record in records:
+        for j in range(9):
+            ws.cell(row=i, column=j+1, value=record[j])
+        i += 1
+    wb.save(filename='static/statistic.xlsx')
+
+
+def get_all_patients_v2():
+    dict = {}
+    with db_session.create_session() as db_sess:
+        patients = db_sess.query(Patient, AcceptTime.time).join(AcceptTime).group_by(Patient.id, AcceptTime.time).all()
+        for patient in patients:
+            if patient[0] not in dict:
+                dict[patient[0]] = [patient[1]]
+            else:
+                dict[patient[0]].append(patient[1])
+        print(list(dict.items()))
 

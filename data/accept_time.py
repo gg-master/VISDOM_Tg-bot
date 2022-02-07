@@ -14,3 +14,6 @@ class AcceptTime(SqlAlchemyBase):
     record = orm.relationship('Record', back_populates='accept_time', passive_deletes='all')
     patient = orm.relation('Patient')
 
+    def __repr__(self):
+        return f'{self.patient_id} - {self.time}'
+
