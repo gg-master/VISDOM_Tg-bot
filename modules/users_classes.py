@@ -273,8 +273,8 @@ class PatientUser(BasicUser):
         # TODO удалить кастомные настройки перед деплоем
         self.tz = pytz.timezone('Etc/GMT-3')
         self.times = {
-            'MOR': dt.datetime(1212, 12, 12, 9, 24, 0),
-            'EVE': dt.datetime(1212, 12, 12, 18, 29, 0)
+            'MOR': dt.datetime(1212, 12, 12, 10, 59, 0),
+            'EVE': dt.datetime(1212, 12, 12, 11, 0, 0)
         }
         self.accept_times = add_patient(
             time_morn=self.times['MOR'].time(),
