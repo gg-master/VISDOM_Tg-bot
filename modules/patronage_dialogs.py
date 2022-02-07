@@ -6,7 +6,7 @@ from modules.dialogs_shortcuts.start_shortcuts import SEND_USER_DATA_PAT, END
 from modules.users_classes import PatientUser, PatronageUser
 from tools.decorators import registered_patronages
 from db_api import get_patient_by_chat_id, get_patient_by_user_code, \
-    make_file_by_patient_user_code, make_file_patients
+    make_file_by_patient_user_code, make_file_patients, make_patient_list
 
 
 class PatronageJob(ConversationHandler):
@@ -97,7 +97,9 @@ class PatronageJob(ConversationHandler):
     @staticmethod
     @registered_patronages
     def send_patients_list(update: Update, context: CallbackContext):
-        update.effective_chat.send_message("send_patients_list")
+        make_patient_list()
+        update.effective_chat.send_document(
+            open('static/Список пациентов.txt', 'rb'))
         return END
 
     @staticmethod

@@ -183,3 +183,9 @@ def get_all_patients_v2():
                 dict[patient[0]].append(patient[1])
         print(list(dict.items()))
 
+
+def make_patient_list():
+    with db_session.create_session() as db_sess:
+        patients_user_codes = db_sess.query(Patient.user_code).all()
+    with open('static/Список пациентов.txt', 'w') as f:
+        f.write('\n'.join(list(map(lambda x: x[0], patients_user_codes))))
