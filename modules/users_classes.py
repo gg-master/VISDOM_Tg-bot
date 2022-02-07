@@ -109,10 +109,12 @@ class PatientUser(BasicUser):
                 user=self,
                 task_data={
                     'interval': dt.timedelta(
-                        hours=1,
-                        # minutes=2
+                        # hours=1,
+                        minutes=2
                     ) if name == 'MOR'
-                    else dt.timedelta(minutes=30),
+                    else dt.timedelta(
+                        minutes=2
+                    ),
                     'last': self.tz.localize(self.time_limiters[name][1]
                                              ).astimezone(pytz.utc).time()
                 },
@@ -144,7 +146,7 @@ class PatientUser(BasicUser):
             minutes=2
         ) if state_name == 'MOR' \
             else dt.timedelta(
-            minutes=30
+            minutes=2
                               )
 
         f = dt.timedelta(hours=first.hour, minutes=first.minute)
@@ -273,8 +275,8 @@ class PatientUser(BasicUser):
         # TODO удалить кастомные настройки перед деплоем
         self.tz = pytz.timezone('Etc/GMT-3')
         self.times = {
-            'MOR': dt.datetime(1212, 12, 12, 10, 59, 0),
-            'EVE': dt.datetime(1212, 12, 12, 11, 0, 0)
+            'MOR': dt.datetime(1212, 12, 12, 17, 51, 0),
+            'EVE': dt.datetime(1212, 12, 12, 17, 53, 0)
         }
         self.accept_times = add_patient(
             time_morn=self.times['MOR'].time(),

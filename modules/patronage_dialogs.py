@@ -6,7 +6,7 @@ from modules.dialogs_shortcuts.start_shortcuts import SEND_USER_DATA_PAT, END
 from modules.users_classes import PatientUser, PatronageUser
 from tools.decorators import registered_patronages
 from db_api import get_patient_by_chat_id, get_patient_by_user_code, \
-    make_file_by_patient_user_code
+    make_file_by_patient_user_code, make_file_patients
 
 
 class PatronageJob(ConversationHandler):
@@ -56,19 +56,23 @@ class PatronageJob(ConversationHandler):
     @registered_patronages
     def send_user_data(update: Update, context: CallbackContext):
         user_code = update.message.text
-        # try:
-        patient = get_patient_by_user_code(user_code)
-        if patient:
-            make_file_by_patient_user_code(user_code)
-            update.effective_chat.send_document(
-                open(f'static/{patient.user_code}.xlsx', 'rb'))
-        else:
-            update.message.reply_text('Пациента с таким кодом не существует')
-        # except Exception as e:
-        #     print(e)
-        #     update.message.reply_text('Пациента с таким кодом не существует')
-        # finally:
-        #     return END
+        try:
+            patient = get_patient_by_user_code(user_code)
+            if patient:
+                make_file_by_patient_user_code(user_code)
+                update.effective_chat.send_document(
+                    open(f'static/{user_code}_data.xlsx', 'rb'))
+            else:
+                update.message.reply_text(
+                    'Пациента с таким кодом не существует')
+        except FileNotFoundError as e:
+            print(e)
+            update.message.reply_text(
+                'Файл не найден. Обратитесь к администратору.')
+        except Exception as e:
+            print(e)
+        finally:
+            return END
 
     @staticmethod
     # @registered_patronages
@@ -85,9 +89,9 @@ class PatronageJob(ConversationHandler):
     @staticmethod
     @registered_patronages
     def send_users_data(update: Update, context: CallbackContext):
-        PatronageUser.make_file_patients()
+        make_file_patients()
         update.effective_chat.send_document(
-            open(f'static/statistics.xlsx', 'rb'))
+            open('static/statistics.xlsx', 'rb'))
         return END
 
     @staticmethod

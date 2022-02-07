@@ -152,19 +152,18 @@ class FindLocationDialog(ConversationHandler):
         response = update.message.text
         location = update.message.location
 
+        context.user_data[START_OVER] = True
         if response and 'Нет, неверно' in response:
-            context.user_data[START_OVER] = True
             return FindLocationDialog.start(update, context)
 
         elif (response and 'Да, верно' in response) or location:
             # Returning to second level patient registration conv.
-            context.user_data[START_OVER] = True
-
             if location:
                 context.user_data['user'].location = Location(
                     location={'Нет адреса': [location.longitude,
                                              location.latitude]})
         if ret:
+            context.user_data[START_OVER] = False
             return ret(update, context)
         return PatientRegistrationDialog.start(update, context)
 

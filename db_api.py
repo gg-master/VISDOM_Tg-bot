@@ -169,7 +169,7 @@ def make_file_patients():
         for j in range(9):
             ws.cell(row=i, column=j+1, value=record[j])
         i += 1
-    wb.save(filename='static/statistic.xlsx')
+    wb.save(filename='static/statistics.xlsx')
 
 
 def get_all_patients_v2():
