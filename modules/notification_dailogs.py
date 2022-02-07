@@ -55,6 +55,7 @@ class PillTakingDialog(ConversationHandler):
         user.msg_to_del = msg
 
         # Само-удаление сообщения с возможностью добавить ответ на уведомление
+        # TODO изменить время для самоудаления сообщения
         remove_job_if_exists(f'{user.chat_id}-pre_start_msg', context)
         context.job_queue.run_once(
             callback=deleting_pre_start_msg_task,

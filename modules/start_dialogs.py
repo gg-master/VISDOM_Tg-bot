@@ -331,13 +331,11 @@ class ConfigureTZDialog(ConversationHandler):
         try:
             context.user_data['user'].location = Location(tz=msg)
 
-            context.user_data[START_OVER] = True
-
             if not ret:
+                context.user_data[START_OVER] = True
                 return ConfigureTZDialog.back(update, context)
             return ret(update, context)
         except ValueError:
-            context.user_data[START_OVER] = True
             text = 'Часовой пояс был введен в неправильном формате. ' \
                    'Попробуйте снова.'
             update.message.reply_text(text=text)
