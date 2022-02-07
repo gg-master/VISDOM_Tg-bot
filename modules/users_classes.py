@@ -73,7 +73,8 @@ class PatientUser(BasicUser):
         # при обновлении уведомления.
         self.msg_to_del = self.active_dialog_msg = None
 
-        self.alarmed = False
+        self.alarmed = {'MOR': False, 'EVE': False}
+
         # Текущее состояние диалога
         self.curr_state = []  # [name, index]
 
@@ -100,6 +101,7 @@ class PatientUser(BasicUser):
         """Создание уведомлений при регистрации или
         после изменения времени в настройках"""
         for name, notification_time in list(self.times.items())[:]:
+            # TODO проверить время уведомлений
             create_daily_notification(
                 context=context,
                 time=self.tz.localize(notification_time),
@@ -138,9 +140,12 @@ class PatientUser(BasicUser):
             return None
         # TODO подправить время интервала
         interval = dt.timedelta(
-            # hours=1,
-            minutes=2) if state_name == 'MOR' \
-            else dt.timedelta(minutes=2)
+            hours=1,
+            # minutes=2
+        ) if state_name == 'MOR' \
+            else dt.timedelta(
+            minutes=30
+                              )
 
         f = dt.timedelta(hours=first.hour, minutes=first.minute)
         n = dt.timedelta(hours=now.hour, minutes=now.minute)
@@ -238,9 +243,10 @@ class PatientUser(BasicUser):
         if ch_tz:
             change_patients_time_zone(self.chat_id, self.tz.zone)
 
-    def restore(self, times: Dict[str, dt.time], tz_str: str,
+    def restore(self, code: str, times: Dict[str, dt.time], tz_str: str,
                 accept_times):
         super().register()
+        self.code = code
 
         # Конвертирование часового пояса из строки в объект
         self.tz = pytz.timezone(tz_str)
@@ -283,7 +289,7 @@ class PatientUser(BasicUser):
 
     def save_patient_record(self):
         print(self.data_response)
-        self.alarmed = False
+        self.alarmed[self.state()[0]] = False
         Thread(target=self._threading_save_record).start()
 
     def _threading_save_record(self):
@@ -312,7 +318,7 @@ class PatientUser(BasicUser):
 
     def check_user_records(self, context: CallbackContext):
         # Если аларм у пользователя уже сработал, то заново не активируем
-        if self.alarmed:
+        if any(self.alarmed.values()):
             return None
         Thread(target=self._thread_check_user_records, args=(context,)).start()
 
@@ -321,6 +327,7 @@ class PatientUser(BasicUser):
         eve_record = self.check_last_record_by_name('EVE')
         if (not mor_record[0] and mor_record[1] > 24) or \
                 (not eve_record[0] and eve_record[1] > 24):
+            self.alarmed['MOR' if mor_record[1] > 24 else "EVE"] = True
             PatronageUser.send_alarm(
                 context=context,
                 user=self
@@ -362,16 +369,21 @@ class PatronageUser(BasicUser):
 
     @staticmethod
     def send_alarm(context, **kwargs):
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
         user = kwargs['user']
-
-        patient = get_patient_by_chat_id(user.chat_id)
-
+        # TODO проработать общение касаемо аларма
         patronage = get_all_patronages()[0]
         text = f'❗️ Внимание ❗️\n' \
-               f'В течении суток пациент {patient.user_code} не принял ' \
+               f'В течении суток пациент {user.code} не принял ' \
                f'лекарство/не отправил данные давления и ЧСС.\n'
 
-        context.bot.send_message(patronage.chat_id, text)
+        kb = InlineKeyboardMarkup(
+            [[InlineKeyboardButton(
+                'Получить данные о пациенте',
+                callback_data=f'A_PATIENT_DATA&{user.code}')]])
+
+        context.bot.send_message(patronage.chat_id, text, reply_markup=kb)
 
     @staticmethod
     def make_file_by_patient(patient):

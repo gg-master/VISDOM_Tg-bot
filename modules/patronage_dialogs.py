@@ -1,6 +1,6 @@
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ConversationHandler, MessageHandler, Filters, \
-    CommandHandler, CallbackContext
+    CommandHandler, CallbackContext, CallbackQueryHandler
 
 from modules.dialogs_shortcuts.start_shortcuts import SEND_USER_DATA_PAT, END
 from modules.users_classes import PatientUser, PatronageUser
@@ -20,7 +20,9 @@ class PatronageJob(ConversationHandler):
                     Filters.regex('^Получить данные по всем пользователям$'),
                     PatronageJob.send_users_data),
                 MessageHandler(Filters.regex('^Получить список пациентов$'),
-                               PatronageJob.send_patients_list)
+                               PatronageJob.send_patients_list),
+                CallbackQueryHandler(self.alarm_send_p_data,
+                                     pattern='^A_PATIENT_DATA')
             ],
             states={
                 SEND_USER_DATA_PAT: [
@@ -67,6 +69,18 @@ class PatronageJob(ConversationHandler):
         #     update.message.reply_text('Пациента с таким кодом не существует')
         # finally:
         #     return END
+
+    @staticmethod
+    # @registered_patronages
+    def alarm_send_p_data(update: Update, context: CallbackContext):
+        # TODO проработка диалога аларма
+        data = update.callback_query.data
+        user_code = data[data.find('&') + 1:]
+
+        patient = get_patient_by_user_code(user_code)
+        make_file_by_patient_user_code(user_code)
+        update.effective_chat.send_document(
+            open(f'static/{patient.user_code}.xlsx', 'rb'))
 
     @staticmethod
     @registered_patronages

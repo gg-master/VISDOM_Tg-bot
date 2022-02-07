@@ -129,17 +129,28 @@ class PillTakingDialog(ConversationHandler):
     def reason(update: Update, context: CallbackContext):
         """Запрашивает у пользователя причину"""
         text = "Опишите вашу причину"
-        update.callback_query.answer()
-        update.callback_query.edit_message_text(text=text)
+        if not context.user_data[START_OVER]:
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(text=text)
+        else:
+            update.effective_chat.send_message(text=text)
+            context.user_data[START_OVER] = False
         return TYPING
 
     @staticmethod
     def save_reason(update: Update, context: CallbackContext):
         """Сохранение пользовательского ответа"""
-        context.user_data['user'].pill_response = \
-            f'Я не могу принять лекарство. Причина: {update.message.text}'
+        resp = update.message.text
+
         context.user_data[START_OVER] = True
-        return PillTakingDialog.start(update, context)
+        if len(resp) <= 100:
+            context.user_data['user'].pill_response = \
+                f'Я не могу принять лекарство. Причина: {update.message.text}'
+            return PillTakingDialog.start(update, context)
+        text = 'Ваш ответ превышает слишком длинный.' \
+               '\nВозможное количество символов: 100'
+        update.message.reply_text(text=text)
+        return PillTakingDialog.reason(update, context)
 
     @staticmethod
     def end(update: Update, context: CallbackContext):

@@ -30,6 +30,7 @@ class Restore:
 
         p = PatientUser(patient.chat_id)
         p.restore(
+            code=patient.user_code,
             tz_str=patient.time_zone,
             times={'MOR': accept_times[0].time, 'EVE': accept_times[1].time},
             accept_times={'MOR': accept_times[0].id, 'EVE': accept_times[1].id}
