@@ -74,7 +74,7 @@ def main():
     dp.add_handler(MessageHandler(Filters.regex('Справка$'), help_msg))
 
     dp.add_handler(MessageHandler(Filters.command, unknown))
-    dp.add_handler(MessageHandler(Filters.text, echo))
+    # dp.add_handler(MessageHandler(Filters.text, echo))
 
     updater.start_polling()
     # Ждём завершения приложения.
