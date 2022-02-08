@@ -47,4 +47,5 @@ END = ConversationHandler.END
     PATRONAGE_REGISTRATION_ACTION,
     TYPING_TOKEN,
     SEND_USER_DATA_PAT,
-) = map(chr, range(16, 19))
+    EXCLUDE_PATIENT
+) = map(chr, range(16, 20))

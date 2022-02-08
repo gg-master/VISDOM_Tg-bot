@@ -2,6 +2,8 @@ from db_api import *
 from time import strptime
 import pandas as pd
 # from modules.users_classes import PatronageUser
+import time
+import datetime
 
 
 
@@ -27,7 +29,12 @@ def main() -> None:
     # with db_session.create_session() as db:
     #     patient = db.query(Patient).filter(Patient.id == 34).first()
     #     print(patient.accept_time)
-    make_file_by_patient('ASD')
+    # print(patient_exists_by_user_code('ASD'))
+    # add_record(time=time.strptime('8:00', '%H:%M'), sys_press=120, dias_press=80,
+    #            heart_rate=90, time_zone=3,
+    #            response_time=time.strptime('8:02', '%H:%M'), comment='custom', accept_time_id=184)
+    # make_file_patients()
+    make_patient_list()
 
 
 
