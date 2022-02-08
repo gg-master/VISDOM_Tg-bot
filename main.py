@@ -75,7 +75,7 @@ def main():
 
     dp.add_handler(MessageHandler(Filters.command, unknown))
     # dp.add_handler(MessageHandler(Filters.text, echo))
-    # www12
+
     updater.start_polling()
     # Ждём завершения приложения.
     # (например, получения сигнала SIG_TERM при нажатии клавиш Ctrl+C)
