@@ -22,7 +22,6 @@ from db_api import get_patient_by_chat_id, add_patient, change_accept_time, \
     change_patients_time_zone, get_last_record_by_accept_time, add_patronage, \
     get_patronage_by_chat_id, add_record, get_all_patronages
 
-from pandas import DataFrame
 from data import db_session
 
 db_session.global_init()
