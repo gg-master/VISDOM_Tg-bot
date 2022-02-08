@@ -45,7 +45,7 @@ def daily_task(context: CallbackContext):
     user.alarmed[data['name']] = False
 
     # Проверяем последний рекорд и при необходимости бъем тревогу
-    user.check_user_records()
+    user.check_user_records(context)
 
     # Устанавливаем пользователю состояние диалога
     user.set_curr_state(data['name'])

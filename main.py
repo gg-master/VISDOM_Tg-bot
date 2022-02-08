@@ -39,13 +39,13 @@ def help_msg(update: Update, context: CallbackContext):
         update.message.reply_text("Справка. Команды для патронажа.")
 
 
-def echo(update: Update, context: CallbackContext):
-    import pytz
-    date = update.message.date
-    tz = pytz.timezone('Etc/Gmt-3')
-    print(tz.normalize(date), '\n', date.astimezone(tz))
-    update.message.reply_text(update.message.text)
-
+# def echo(update: Update, context: CallbackContext):
+#     import pytz
+#     date = update.message.date
+#     tz = pytz.timezone('Etc/Gmt-3')
+#     print(tz.normalize(date), '\n', date.astimezone(tz))
+#     update.message.reply_text(update.message.text)
+#
 
 def main():
     updater = Updater(get_from_env('TOKEN'),
@@ -74,7 +74,7 @@ def main():
     dp.add_handler(MessageHandler(Filters.regex('Справка$'), help_msg))
 
     dp.add_handler(MessageHandler(Filters.command, unknown))
-    dp.add_handler(MessageHandler(Filters.text, echo))
+    # dp.add_handler(MessageHandler(Filters.text, echo))
 
     updater.start_polling()
     # Ждём завершения приложения.
