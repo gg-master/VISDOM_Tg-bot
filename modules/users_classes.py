@@ -382,15 +382,17 @@ class PatronageUser(BasicUser):
 
         user = kwargs['user']
         # TODO проработать общение касаемо аларма
-        patronage = get_all_patronages()[0]
-        text = f'❗️ Внимание ❗️\n' \
-               f'В течении суток пациент {user.code} не принял ' \
-               f'лекарство/не отправил данные давления и ЧСС.\n'
+        patronage = get_all_patronages()
+        if patronage:
+            patronage = patronage[0]
+            text = f'❗️ Внимание ❗️\n' \
+                   f'В течении суток пациент {user.code} не принял ' \
+                   f'лекарство/не отправил данные давления и ЧСС.\n'
 
-        kb = InlineKeyboardMarkup(
-            [[InlineKeyboardButton(
-                'Получить данные о пациенте',
-                callback_data=f'A_PATIENT_DATA&{user.code}')]],
-            one_time_keyboard=True)
+            kb = InlineKeyboardMarkup(
+                [[InlineKeyboardButton(
+                    'Получить данные о пациенте',
+                    callback_data=f'A_PATIENT_DATA&{user.code}')]],
+                one_time_keyboard=True)
 
-        context.bot.send_message(patronage.chat_id, text, reply_markup=kb)
+            context.bot.send_message(patronage.chat_id, text, reply_markup=kb)
