@@ -22,7 +22,6 @@ from db_api import get_patient_by_chat_id, add_patient, change_accept_time, \
     change_patients_time_zone, get_last_record_by_accept_time, add_patronage, \
     get_patronage_by_chat_id, add_record, get_all_patronages
 
-from pandas import DataFrame
 from data import db_session
 
 db_session.global_init()
@@ -382,15 +381,17 @@ class PatronageUser(BasicUser):
 
         user = kwargs['user']
         # TODO проработать общение касаемо аларма
-        patronage = get_all_patronages()[0]
-        text = f'❗️ Внимание ❗️\n' \
-               f'В течении суток пациент {user.code} не принял ' \
-               f'лекарство/не отправил данные давления и ЧСС.\n'
+        patronage = get_all_patronages()
+        if patronage:
+            patronage = patronage[0]
+            text = f'❗️ Внимание ❗️\n' \
+                   f'В течении суток пациент {user.code} не принял ' \
+                   f'лекарство/не отправил данные давления и ЧСС.\n'
 
-        kb = InlineKeyboardMarkup(
-            [[InlineKeyboardButton(
-                'Получить данные о пациенте',
-                callback_data=f'A_PATIENT_DATA&{user.code}')]],
-            one_time_keyboard=True)
+            kb = InlineKeyboardMarkup(
+                [[InlineKeyboardButton(
+                    'Получить данные о пациенте',
+                    callback_data=f'A_PATIENT_DATA&{user.code}')]],
+                one_time_keyboard=True)
 
-        context.bot.send_message(patronage.chat_id, text, reply_markup=kb)
+            context.bot.send_message(patronage.chat_id, text, reply_markup=kb)
