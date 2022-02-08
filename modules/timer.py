@@ -26,7 +26,8 @@ def create_daily_notification(context: CallbackContext, **kwargs):
             callback=daily_task,
             time=kwargs['time'],
             context=kwargs,
-            name=f'{chat_id}-{kwargs["name"]}'
+            name=f'{chat_id}-{kwargs["name"]}',
+            job_kwargs={'next_run_time': kwargs['next_run_time']},
         )
     except (IndexError, ValueError):
         context.bot.send_message(chat_id, 'Произошла ошибка про попытке '

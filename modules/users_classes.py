@@ -15,9 +15,6 @@ from modules.timer import create_daily_notification, remove_job_if_exists, \
     repeating_task
 from tools.tools import convert_tz
 
-from data.patient import Patient
-from data.record import Record
-
 from db_api import get_patient_by_chat_id, add_patient, change_accept_time, \
     change_patients_time_zone, get_last_record_by_accept_time, add_patronage, \
     get_patronage_by_chat_id, add_record, get_all_patronages
@@ -90,44 +87,56 @@ class PatientUser(BasicUser):
         delta = dt.timedelta(minutes=int(minutes))
         self.times[time] += delta
         # Ограничение времени
-        if not (self.time_limiters[time][0] <= self.times[time]
-                <= self.time_limiters[time][1]):
+        if not (self.default_times[time].replace(
+                hour=self.default_times[time].hour - 1) <= self.times[time]
+                <= self.default_times[time].replace(
+                    hour=self.default_times[time].hour + 1)):
             self.times[time] -= delta
             return False
         return True
 
-    def create_notification(self, context: CallbackContext):
+    def create_notification(self, context: CallbackContext, **kwargs):
         """Создание уведомлений при регистрации или
         после изменения времени в настройках"""
         for name, notification_time in list(self.times.items())[:]:
+            time = self.tz.localize(notification_time)
+
+            now = dt.datetime.now(tz=self.tz)
+            if kwargs.get('register') and name == 'MOR':
+                next_r_time = now.replace(
+                    day=now.day + 1, hour=time.hour, minute=time.minute,
+                    second=0, microsecond=0)
+            else:
+                next_r_time = now.replace(hour=time.hour, minute=time.minute,
+                                          second=0, microsecond=0)
+
             # TODO проверить время уведомлений
             create_daily_notification(
                 context=context,
-                time=self.tz.localize(notification_time),
+                time=time,
+                next_run_time=next_r_time,
                 name=name,
                 user=self,
                 task_data={
-                    'interval': dt.timedelta(
-                        hours=1,
-                        # minutes=2
-                    ) if name == 'MOR'
-                    else dt.timedelta(
-                        minutes=30
-                    ),
+                    'interval': dt.timedelta(hours=1) if name == 'MOR'
+                    else dt.timedelta(minutes=30),
                     'last': self.tz.localize(self.time_limiters[name][1]
-                                             ).astimezone(pytz.utc).time()
-                },
+                                             ).astimezone(pytz.utc).time()},
             )
+            job = context.job_queue.get_jobs_by_name(f'{self.chat_id}-{name}')
+            print(job[0].next_t)
 
-    def recreate_notification(self, context: CallbackContext):
+    def recreate_notification(self, context: CallbackContext, **kwargs):
         remove_job_if_exists(f'{self.chat_id}-rep_task', context)
-        self.create_notification(context)
+        self.create_notification(context, **kwargs)
 
-    def restore_repeating_task(self, context: CallbackContext):
+    def restore_repeating_task(self, context: CallbackContext, **kwargs):
         """Восстановление повторяющихся сообщений"""
         state_name = self.state()[0]
 
-        if self.check_last_record_by_name(state_name)[0]:
+        # После регистрации первое утреннее уведомление придет на след. день
+        if self.check_last_record_by_name(state_name)[0] or \
+                (kwargs['register'] and state_name == 'MOR'):
             return None
 
         # Проверяем время в которое произошел рестарт.
@@ -140,13 +149,8 @@ class PatientUser(BasicUser):
         if now < first.time() or now > last.time():
             return None
         # TODO подправить время интервала
-        interval = dt.timedelta(
-            hours=1,
-            # minutes=2
-        ) if state_name == 'MOR' \
-            else dt.timedelta(
-            minutes=30
-            )
+        interval = dt.timedelta(hours=1) if state_name == 'MOR' \
+            else dt.timedelta(minutes=30)
 
         f = dt.timedelta(hours=first.hour, minutes=first.minute)
         n = dt.timedelta(hours=now.hour, minutes=now.minute)
@@ -204,11 +208,11 @@ class PatientUser(BasicUser):
         self.times = self.orig_t.copy()
         self.location = self.orig_loc
 
-    def save_updating(self, context: CallbackContext, check_usr=True):
+    def save_updating(self, context: CallbackContext, check_user=True):
         """Сохранение изменение настроект ЧП и времени уведомлений"""
         # Проверка существует ли пользователь в бд
-        if check_usr and (not get_patient_by_chat_id(self.chat_id)
-                          or not self.accept_times):
+        if check_user and (not get_patient_by_chat_id(self.chat_id)
+                           or not self.accept_times):
             raise ValueError()
         # Флаги, чтобы узнать изменилось ли время или часовой пояс
         ch_times = ch_tz = False
@@ -225,13 +229,13 @@ class PatientUser(BasicUser):
 
             self._set_curr_state_by_time()
 
-            if check_usr:
+            if check_user:
                 Thread(target=self._threading_save_sett,
                        args=(ch_times, ch_tz)).start()
 
             # Восстанавливливаем уведомления
-            self.recreate_notification(context)
-            self.restore_repeating_task(context)
+            self.recreate_notification(context, register=not check_user)
+            self.restore_repeating_task(context, register=not check_user)
 
             self.check_user_records(context)
 
@@ -293,7 +297,7 @@ class PatientUser(BasicUser):
             time_zone=self.tz.zone,
             chat_id=self.chat_id
         )
-        self.save_updating(context, check_usr=False)
+        self.save_updating(context, check_user=False)
 
     def save_patient_record(self):
         # print(self.data_response)
@@ -335,10 +339,12 @@ class PatientUser(BasicUser):
         eve_record = self.check_last_record_by_name('EVE')
         if (not mor_record[0] and mor_record[1] >= 25) or \
                 (not eve_record[0] and eve_record[1] >= 25):
-            self.alarmed['MOR' if mor_record[1] > 24 else "EVE"] = True
+            self.alarmed['MOR' if mor_record[1] >= 25 else "EVE"] = True
             PatronageUser.send_alarm(
                 context=context,
-                user=self
+                user=self,
+                days=int(mor_record[1] / 24) if self.alarmed['MOR']
+                else int(eve_record[1] / 24)
             )
 
     def check_last_record_by_name(self, name) -> Tuple[bool, int]:
@@ -350,9 +356,8 @@ class PatientUser(BasicUser):
         recs = get_last_record_by_accept_time(self.accept_times[name])
         hours = 24
         if recs:
-            rec: Record = recs[-1]
             now = dt.datetime.now(tz=self.tz)
-            hours = abs(now - rec.response_time.astimezone(
+            hours = abs(now - recs[-1].response_time.astimezone(
                 self.tz)).total_seconds() // 3600
             if hours < 24:
                 return True, hours
@@ -386,7 +391,8 @@ class PatronageUser(BasicUser):
             patronage = patronage[0]
             text = f'❗️ Внимание ❗️\n' \
                    f'В течении суток пациент {user.code} не принял ' \
-                   f'лекарство/не отправил данные давления и ЧСС.\n'
+                   f'лекарство/не отправил данные давления и ЧСС.\n' \
+                   f'Дней без ответа: {kwargs["days"]}'
 
             kb = InlineKeyboardMarkup(
                 [[InlineKeyboardButton(

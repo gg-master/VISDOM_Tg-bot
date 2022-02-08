@@ -77,8 +77,11 @@ class Restore:
                                   callback_data=f'RESTORE_PATRONAGE')],
         ]
         keyboard = InlineKeyboardMarkup(buttons)
-        context.bot.send_message(
-            kwargs['chat_id'], text=text, reply_markup=keyboard)
+        try:
+            context.bot.send_message(
+                kwargs['chat_id'], text=text, reply_markup=keyboard)
+        except Exception as e:
+            logging.warning("CANT SEND RESTORE_MSG TO PATRONAGE. CHAT NOT FOUND")
 
 
 @not_registered_users
@@ -121,6 +124,9 @@ def patronage_restore_handler(update: Update, context: CallbackContext):
     p = context.user_data['user'] = PatronageUser(update.effective_chat.id)
     p.restore(context)
     logging.info(f'RESTORED PATRONAGE: {p.chat_id}')
-    update.callback_query.delete_message()
-    update.effective_chat.send_message('Доступ восстановлен.')
-    PatronageJob.default_job(update, context)
+    try:
+        update.callback_query.delete_message()
+        update.effective_chat.send_message('Доступ восстановлен.')
+        PatronageJob.default_job(update, context)
+    except Exception as e:
+        logging.warning("CANT SEND RESTORE_MSG TO PATIENT. CHAT NOT FOUND")
