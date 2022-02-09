@@ -11,7 +11,6 @@ from db_api import get_patient_by_user_code, \
 
 from os import remove
 from modules.patient_list import patient_list
-from modules.timer import remove_job_if_exists
 from tools.decorators import registered_patronages
 
 

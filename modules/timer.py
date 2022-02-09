@@ -1,8 +1,5 @@
 import logging
 
-import pytz
-import datetime as dt
-
 from telegram.ext import CallbackContext
 
 
@@ -59,7 +56,6 @@ def daily_task(context: CallbackContext):
 
     # Если пользователь не ответил на предыдущее сообщение (уведомление),
     # то удаляем его
-    # TODO фикс бага при удалении сообщения
     if user.msg_to_del:
         try:
             context.bot.delete_message(user.chat_id,

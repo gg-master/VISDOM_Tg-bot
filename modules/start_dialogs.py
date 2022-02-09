@@ -552,7 +552,7 @@ class PatronageRegistrationDialog(ConversationHandler):
             return END
         if token == get_from_env('PATRONAGE_TOKEN'):
             context.user_data['user'] = PatronageUser(update.effective_chat.id)
-            context.user_data['user'].register(update, context)
+            context.user_data['user'].register(uptimate, context)
             # keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(
             #     text='Начать работу', callback_data=DEFAULT_JOB)]])
             update.effective_chat.send_message('Вы успешно зарегестрированы!')

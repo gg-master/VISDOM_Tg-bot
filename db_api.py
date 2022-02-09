@@ -76,7 +76,8 @@ def change_patients_time_zone(chat_id: int, time_zone: int) -> None:
 
 def change_accept_time(accept_time_id, time):
     with db_session.create_session() as db_sess:
-        accept_time = db_sess.query(AcceptTime).filter(AcceptTime.id == accept_time_id).first()
+        accept_time = db_sess.query(AcceptTime).filter(AcceptTime.id ==
+                                                       accept_time_id).first()
         accept_time.time = time
         db_sess.add(accept_time)
         db_sess.commit()
@@ -92,7 +93,8 @@ def change_patients_membership(user_code: str, member: bool) -> None:
 
 def patient_exists_by_user_code(user_code):
     with db_session.create_session() as db_sess:
-        return db_sess.query(db_sess.query(Patient).filter(Patient.user_code == user_code).exists()).scalar()
+        return db_sess.query(db_sess.query(Patient).filter(
+            Patient.user_code == user_code).exists()).scalar()
 
 
 def add_patronage(**kwargs: Any) -> None:
@@ -168,7 +170,8 @@ def make_file_patients():
                'Диастолическое давление', 'Частота сердечных сокращений',
                'Время приема таблеток и измерений', 'Часовой пояс',
                'Время ответа', 'Комментарий']
-    with open('static/statistics.csv', 'w', encoding='utf-8', newline='') as csvfile:
+    with open('static/statistics.csv', 'w', encoding='utf-8', newline='') as \
+            csvfile:
         writer = csv.writer(csvfile, delimiter=';', quotechar='"',
                             quoting=csv.QUOTE_MINIMAL)
         writer.writerow(headers)
@@ -187,7 +190,8 @@ def make_file_patients():
 def get_all_patients_v2():
     dict = {}
     with db_session.create_session() as db_sess:
-        patients = db_sess.query(Patient, AcceptTime.time).join(AcceptTime).group_by(Patient.id, AcceptTime.time).all()
+        patients = db_sess.query(Patient, AcceptTime.time).join(
+            AcceptTime).group_by(Patient.id, AcceptTime.time).all()
         for patient in patients:
             if patient[0] not in dict:
                 dict[patient[0]] = [patient[1]]
@@ -198,7 +202,8 @@ def get_all_patients_v2():
 
 def make_patient_list():
     with db_session.create_session() as db_sess:
-        patients_user_codes = db_sess.query(Patient.user_code, Patient.member).all()
+        patients_user_codes = db_sess.query(Patient.user_code,
+                                            Patient.member).all()
     wb = Workbook()
     ws = wb.active
     for i in range(len(patients_user_codes)):
