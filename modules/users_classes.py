@@ -10,6 +10,7 @@ from telegram import Update
 from telegram.ext import CallbackContext
 
 from modules.location import Location
+from modules.patient_list import patient_list
 from modules.notification_dailogs import PillTakingDialog, DataCollectionDialog
 from modules.timer import create_daily_notification, remove_job_if_exists, \
     repeating_task
@@ -299,6 +300,7 @@ class PatientUser(BasicUser):
             time_zone=self.tz.zone,
             chat_id=self.chat_id
         )
+        patient_list[self.chat_id] = self
         self.save_updating(context, check_user=False)
 
     def save_patient_record(self):

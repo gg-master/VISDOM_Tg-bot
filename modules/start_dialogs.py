@@ -228,12 +228,12 @@ class PatientRegistrationDialog(ConversationHandler):
 
     @staticmethod
     def cant_registered(update: Update, context: CallbackContext, res):
+        update.callback_query.delete_message()
         if res is not None:
             text = 'Вы были исключены из исследования и не можете ' \
                    'повторно зарегистрироваться.'
             update.effective_chat.send_message(text)
             return STOPPING
-        update.callback_query.delete_message()
         text = 'Вы не можете повторно зарегистрироваться.\n'
         update.effective_chat.send_message(text)
         Restore.restore_patient_msg(context, chat_id=update.effective_chat.id)
@@ -552,7 +552,7 @@ class PatronageRegistrationDialog(ConversationHandler):
             return END
         if token == get_from_env('PATRONAGE_TOKEN'):
             context.user_data['user'] = PatronageUser(update.effective_chat.id)
-            context.user_data['user'].register(uptimate, context)
+            context.user_data['user'].register(update, context)
             # keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(
             #     text='Начать работу', callback_data=DEFAULT_JOB)]])
             update.effective_chat.send_message('Вы успешно зарегестрированы!')

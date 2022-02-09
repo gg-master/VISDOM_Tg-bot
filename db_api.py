@@ -208,7 +208,7 @@ def make_patient_list():
     ws = wb.active
     for i in range(len(patients_user_codes)):
         cell = ws.cell(row=i+1, column=1, value=patients_user_codes[i][0])
-        if patients_user_codes[i][1]:
+        if not patients_user_codes[i][1]:
             cell.fill = styles.PatternFill('solid', fgColor='FF0000')
     wb.save(filename=f'static/Список пациентов.xlsx')
 

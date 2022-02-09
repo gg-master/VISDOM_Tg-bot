@@ -96,8 +96,7 @@ def patient_restore_handler(update: Update, context: CallbackContext):
 
     # Если уже пришло уведомление, то переотправляем его после восстановления
     if user.msg_to_del:
-        # Получаем id сообщения из таска, который автоматически удалит
-        # сообщение через некоторое время
+        # Получаем id сообщения иp пользователя
         try:
             context.bot.delete_message(user.chat_id,
                                        user.msg_to_del.message_id)
@@ -110,10 +109,6 @@ def patient_restore_handler(update: Update, context: CallbackContext):
         'Доступ восстановлен. Теперь Вы можете добавить ответ на уведомления, '
         'к которым не было доступа.')
     PatientRegistrationDialog.restore_main_msg(update, context)
-    # print(context.job_queue.get_jobs_by_name(
-    #     f'{user.chat_id}-MOR')[0].next_t)
-    # print(context.job_queue.get_jobs_by_name(
-    #     f'{user.chat_id}-EVE')[0].next_t)
 
     # Если уже пришло уведомление, то переотправляем его после восстановления
     if user.msg_to_del:
