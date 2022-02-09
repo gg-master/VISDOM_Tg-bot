@@ -1,13 +1,12 @@
 import logging
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, error
 from telegram.ext import CallbackContext
 
-
-from db_api import get_accept_times_by_patient_id, get_all_patients, \
-    get_all_patronages
-from tools.decorators import not_registered_users
+from db_api import (get_accept_times_by_patient_id, get_all_patients,
+                    get_all_patronages)
 from modules.patient_list import patient_list
+from tools.decorators import not_registered_users
 
 
 class Restore:
@@ -81,8 +80,8 @@ class Restore:
             context.bot.send_message(
                 kwargs['chat_id'], text=text, reply_markup=keyboard)
         except Exception as e:
-            logging.warning(f"CANT SEND RESTORE_MSG TO PATRONAGE. "
-                            f"CHAT NOT FOUND. \nMORE: {e}")
+            logging.warning(f'CANT SEND RESTORE_MSG TO PATRONAGE. '
+                            f'CHAT NOT FOUND. \nMORE: {e}')
 
 
 @not_registered_users
@@ -100,7 +99,7 @@ def patient_restore_handler(update: Update, context: CallbackContext):
         try:
             context.bot.delete_message(user.chat_id,
                                        user.msg_to_del.message_id)
-        except Exception as e:
+        except error.TelegramError:
             pass
 
     # Удаляем сообщени с кнопкой восстановления
@@ -121,16 +120,16 @@ def patient_restore_handler(update: Update, context: CallbackContext):
 
 @not_registered_users
 def patronage_restore_handler(update: Update, context: CallbackContext):
-    from modules.users_classes import PatronageUser
     from modules.patronage_dialogs import PatronageJob
+    from modules.users_classes import PatronageUser
 
     p = context.user_data['user'] = PatronageUser(update.effective_chat.id)
-    p.restore(context)
+    p.restore()
     logging.info(f'RESTORED PATRONAGE: {p.chat_id}')
     try:
         update.callback_query.delete_message()
         update.effective_chat.send_message('Доступ восстановлен.')
         PatronageJob.default_job(update, context)
     except Exception as e:
-        logging.warning(f"CANT SEND RESTORE_MSG TO PATIENT. CHAT NOT FOUND."
-                        f"\nMORE: {e}")
+        logging.warning(f'CANT SEND RESTORE_MSG TO PATIENT. CHAT NOT FOUND.'
+                        f'\nMORE: {e}')

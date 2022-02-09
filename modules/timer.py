@@ -1,5 +1,7 @@
 import logging
+from typing import Dict, Optional
 
+from telegram import error
 from telegram.ext import CallbackContext
 
 
@@ -38,20 +40,14 @@ def create_daily_notification(context: CallbackContext, **kwargs):
 def daily_task(context: CallbackContext):
     """Таски, которые выполняются ежедневно утром и вечером"""
     job = context.job
-    data = job.context
-    # Объект пользователя
+    data: Optional[Dict] = job.context
+
     user = data['user']
 
-    # Сбрасываем флаг об уведомлении
     user.alarmed[data['name']] = False
 
-    # Проверяем последний рекорд и при необходимости бъем тревогу
     user.check_user_records(context)
-
-    # Устанавливаем пользователю состояние диалога
     user.set_curr_state(data['name'])
-
-    # Стираем старые ответы пользователя
     user.clear_responses()
 
     # Если пользователь не ответил на предыдущее сообщение (уведомление),
@@ -71,7 +67,6 @@ def daily_task(context: CallbackContext):
         user.notification_states[data['name']][
             user.state()[1]].pre_start(context, data)
 
-        # Создаем новую циклическую задачу
         context.job_queue.run_repeating(
             callback=repeating_task,
             interval=data['task_data']['interval'],
@@ -84,15 +79,13 @@ def daily_task(context: CallbackContext):
 def repeating_task(context: CallbackContext):
     """Повторяющиеся уведомления в рамках временого лимита"""
     job = context.job
-    data = job.context
+    data: Optional[Dict] = job.context
 
     user = data['user']
 
     if user.msg_to_del:
-        # Удаляем старое сообщение
         context.bot.delete_message(user.chat_id, user.msg_to_del.message_id)
 
-    # Проверяем последний рекорд и при необходимости бъем тревогу
     user.check_user_records(context)
 
     # Запускаем новое уведомление
@@ -103,12 +96,13 @@ def repeating_task(context: CallbackContext):
 def deleting_pre_start_msg_task(context: CallbackContext):
     """Удаление сообщения после временного лимита"""
     job = context.job
-    data = job.context
+    data: Optional[Dict] = job.context
     try:
         user = data['user']
+
         context.bot.delete_message(user.chat_id, user.msg_to_del.message_id)
         user.msg_to_del = None
-        # Проверяем последний рекорд и при необходимости бъем тревогу
+
         user.check_user_records(context)
-    except Exception as e:
+    except error.TelegramError:
         remove_job_if_exists(f'{data["chat_id"]}-pre_start_msg', context)

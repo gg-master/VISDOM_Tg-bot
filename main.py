@@ -1,17 +1,16 @@
 import logging
 
 from telegram import Update
-from telegram.ext import CommandHandler, Updater, MessageHandler, \
-    Filters, Defaults, CallbackQueryHandler
+from telegram.ext import (CallbackQueryHandler, CommandHandler, Defaults,
+                          Filters, MessageHandler, Updater, CallbackContext)
 
-from modules.restore import Restore, patient_restore_handler, \
-    patronage_restore_handler
-from modules.start_dialogs import StartDialog, PatronageJob
+from modules.notification_dailogs import DataCollectionDialog, PillTakingDialog
+from modules.restore import (Restore, patient_restore_handler,
+                             patronage_restore_handler)
 from modules.settings_dialogs import SettingsDialog
-from modules.notification_dailogs import PillTakingDialog, DataCollectionDialog
-from modules.timer import *
+from modules.start_dialogs import PatronageJob, StartDialog
+
 from tools.tools import get_from_env
-from tools.prepared_answers import *
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)s %(name)s %(message)s')

@@ -1,19 +1,15 @@
 import requests
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, \
-    ReplyKeyboardRemove
-from telegram.ext import CallbackContext, ConversationHandler, \
-    CommandHandler, MessageHandler, Filters, CallbackQueryHandler
-
-from tools.prepared_answers import BAD_GEOCODER_RESP
-from tools.tools import get_from_env
+from telegram import (KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove,
+                      Update)
+from telegram.ext import (CallbackContext, CallbackQueryHandler,
+                          CommandHandler, ConversationHandler, Filters,
+                          MessageHandler)
 
 from modules.dialogs_shortcuts.start_shortcuts import (
-    PATIENT_REGISTRATION_ACTION,
-    CONF_LOCATION,
-    START_OVER,
-    STOPPING,
-    END, START_SELECTORS,
-)
+    CONF_LOCATION, END, PATIENT_REGISTRATION_ACTION, START_OVER,
+    START_SELECTORS, STOPPING)
+from tools.prepared_answers import BAD_GEOCODER_RESP
+from tools.tools import get_from_env
 
 
 class Location:
@@ -82,8 +78,7 @@ class FindLocationDialog(ConversationHandler):
                 CommandHandler('stop', StartDialog.stop_nested,
                                run_async=False),
                 CommandHandler('start', StartDialog.restart, run_async=False)
-            ] if not kwargs.get('fallbacks') else kwargs.get('fallbacks')
-            ,
+            ] if not kwargs.get('fallbacks') else kwargs.get('fallbacks'),
             map_to_parent={
                 START_SELECTORS: START_SELECTORS,
                 PATIENT_REGISTRATION_ACTION: END,
@@ -95,9 +90,8 @@ class FindLocationDialog(ConversationHandler):
     def start(update: Update, context: CallbackContext):
         kboard = ReplyKeyboardMarkup(
             [
-                [KeyboardButton(text="Отправить геолокацию",
+                [KeyboardButton(text='Отправить геолокацию',
                                 request_location=True)],
-                # ['Найти адрес'],
                 ['Назад']
             ],
             row_width=1, resize_keyboard=True, one_time_keyboard=True)
@@ -135,8 +129,8 @@ class FindLocationDialog(ConversationHandler):
             context.bot.send_photo(
                 update.message.chat_id,
                 static_api_request,
-                caption="Пожалуйста, убидетесь, что мы правильно "
-                        "определили Ваше местоположение.",
+                caption='Пожалуйста, убидетесь, что мы правильно '
+                        'определили Ваше местоположение.',
                 reply_markup=keyboard)
             return 3
 
@@ -158,7 +152,6 @@ class FindLocationDialog(ConversationHandler):
             return FindLocationDialog.start(update, context)
 
         elif (response and 'Да, верно' in response) or location:
-            # Returning to second level patient registration conv.
             if location:
                 context.user_data['user'].location = Location(
                     location={'Нет адреса': [location.longitude,
@@ -182,19 +175,14 @@ class FindLocationDialog(ConversationHandler):
 
     @staticmethod
     def find_location(update: Update, context: CallbackContext):
-        """
-        Поиск локации в яндексе
-        :param update:
-        :param context:
-        :return: yandex static api request
-        """
+        """Поиск локации в яндексе"""
 
         # Получние ответа от геокодера о поиске адреса
-        geocoder_uri = "http://geocode-maps.yandex.ru/1.x/"
+        geocoder_uri = 'http://geocode-maps.yandex.ru/1.x/'
         response = requests.get(geocoder_uri, params={
-            "apikey": get_from_env('GEOCODER_T'),
-            "format": "json",
-            "geocode": update.message.text
+            'apikey': get_from_env('GEOCODER_T'),
+            'format': 'json',
+            'geocode': update.message.text
         })
         if not response:
             update.message.reply_text(
@@ -211,21 +199,21 @@ class FindLocationDialog(ConversationHandler):
                                       'Попробуйте снова.')
             return None
 
-        toponym = json_response["response"]["GeoObjectCollection"][
-            "featureMember"][0]["GeoObject"]
-        toponym_coodrinates = toponym["Point"]["pos"]
+        toponym = json_response['response']['GeoObjectCollection'][
+            'featureMember'][0]['GeoObject']
+        toponym_coodrinates = toponym['Point']['pos']
 
         # Долгота и широта
-        toponym_longitude, toponym_lattitude = toponym_coodrinates.split(" ")
-        delta = "0.3"
-        ll = ",".join([toponym_longitude, toponym_lattitude])
-        spn = ",".join([delta, delta])
+        toponym_longitude, toponym_lattitude = toponym_coodrinates.split(' ')
+        delta = '0.3'
+        ll = ','.join([toponym_longitude, toponym_lattitude])
+        spn = ','.join([delta, delta])
 
         # Ищем объект на карте, чтобы определить что правильно нашли место
         static_api_request = \
-            f"http://static-maps.yandex.ru/1.x/?ll={ll}" \
-            f"&spn={spn}&l=map&" \
-            f"pt={','.join([toponym_longitude, toponym_lattitude])},vkbkm"
+            f'http://static-maps.yandex.ru/1.x/?ll={ll}' \
+            f'&spn={spn}&l=map&' \
+            f'pt={",".join([toponym_longitude, toponym_lattitude])},vkbkm'
 
         # Запоминаем положение
         context.user_data['user'].location = \

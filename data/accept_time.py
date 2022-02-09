@@ -1,5 +1,6 @@
 import sqlalchemy
 from sqlalchemy import orm
+
 from .db_session import SqlAlchemyBase
 
 
@@ -18,4 +19,3 @@ class AcceptTime(SqlAlchemyBase):
 
     def __repr__(self):
         return f'{self.patient_id} - {self.time}'
-

@@ -1,11 +1,13 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, \
-    ReplyKeyboardMarkup
-from telegram.ext import ConversationHandler, MessageHandler, Filters, \
-    CommandHandler, CallbackQueryHandler, CallbackContext
+from telegram import (InlineKeyboardButton, InlineKeyboardMarkup,
+                      ReplyKeyboardMarkup, Update)
+from telegram.ext import (CallbackContext, CallbackQueryHandler,
+                          CommandHandler, ConversationHandler, Filters,
+                          MessageHandler)
 
-from modules.dialogs_shortcuts.start_shortcuts import \
-    END, CONF_TZ, CONF_NOTIFICATIONS, STOPPING, START_OVER
-from modules.start_dialogs import ConfigureTZDialog, ConfigureNotifTimeDialog
+from modules.dialogs_shortcuts.start_shortcuts import (CONF_NOTIFICATIONS,
+                                                       CONF_TZ, END,
+                                                       START_OVER, STOPPING)
+from modules.start_dialogs import ConfigureNotifTimeDialog, ConfigureTZDialog
 from tools.decorators import registered_patient
 
 # State
@@ -40,7 +42,7 @@ class SettingsDialog(ConversationHandler):
     @staticmethod
     @registered_patient
     def start(update: Update, context: CallbackContext):
-        user = context.user_data["user"]
+        user = context.user_data['user']
         text = 'Настройки.\n' \
                'Здесь Вы можете изменить время получения уведомлений или ' \
                'свой часовой пояс. \n' \
@@ -100,7 +102,7 @@ class SettingsDialog(ConversationHandler):
             text = 'Изменения сохранены.'
             update.effective_chat.send_message(text=text,
                                                reply_markup=keyboard)
-        except ValueError as e:
+        except ValueError:
             context.user_data['user'].cancel_updating()
             text = 'Изменения не удалось сохранить.\n' \
                    'Попробуйте снова через некоторое время.'
@@ -113,7 +115,7 @@ class SettingsDialog(ConversationHandler):
     def stop(update: Update, context: CallbackContext):
         context.user_data['user'].cancel_updating()
 
-        text = "Изменения не были сохранеы."
+        text = 'Изменения не были сохранеы.'
 
         keyboard = ReplyKeyboardMarkup([['❔Справка', '⚙️Настройки']],
                                        row_width=1, resize_keyboard=True)

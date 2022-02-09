@@ -1,26 +1,24 @@
-import re
-
-import pytz
-import logging
 import datetime as dt
+import logging
+import re
 from threading import Thread
 from typing import Dict, Tuple
 
+import pytz
 from telegram import Update
 from telegram.ext import CallbackContext
 
-from modules.location import Location
-from modules.patient_list import patient_list
-from modules.notification_dailogs import PillTakingDialog, DataCollectionDialog
-from modules.timer import create_daily_notification, remove_job_if_exists, \
-    repeating_task
-from tools.tools import convert_tz
-
-from db_api import get_patient_by_chat_id, add_patient, change_accept_time, \
-    change_patients_time_zone, get_last_record_by_accept_time, add_patronage, \
-    get_patronage_by_chat_id, add_record, get_all_patronages
-
 from data import db_session
+from db_api import (add_patient, add_patronage, add_record, change_accept_time,
+                    change_patients_time_zone, get_all_patronages,
+                    get_last_record_by_accept_time, get_patient_by_chat_id,
+                    get_patronage_by_chat_id)
+from modules.location import Location
+from modules.notification_dailogs import DataCollectionDialog, PillTakingDialog
+from modules.patient_list import patient_list
+from modules.timer import (create_daily_notification, remove_job_if_exists,
+                           repeating_task)
+from tools.tools import convert_tz
 
 db_session.global_init()
 db_sess = db_session.create_session()
@@ -38,7 +36,6 @@ class BasicUser:
 
 
 class PatientUser(BasicUser):
-    # Ограничители времени
     time_limiters = {
         'MOR': [dt.datetime(1212, 12, 12, 6, 00, 0),
                 dt.datetime(1212, 12, 12, 12, 00, 0)],
@@ -56,7 +53,6 @@ class PatientUser(BasicUser):
 
     def __init__(self, chat_id: int):
         super().__init__()
-        # Id чата с пользователем
         self.chat_id = chat_id
 
         self.code = None
@@ -96,8 +92,8 @@ class PatientUser(BasicUser):
         self.times[time] += delta
         # Ограничение времени
         if not (self.default_times[time].replace(
-                hour=self.default_times[time].hour - 1) <= self.times[time]
-                <= self.default_times[time].replace(
+                hour=self.default_times[time].hour - 1) <= self.times[time] <=
+                self.default_times[time].replace(
                     hour=self.default_times[time].hour + 1)):
             self.times[time] -= delta
             return False
@@ -115,7 +111,7 @@ class PatientUser(BasicUser):
                 next_r_time = now.replace(
                     day=now.day + 1, hour=time.hour, minute=time.minute,
                     second=0, microsecond=0)
-            # TODO проверить время уведомлений
+
             create_daily_notification(
                 context=context,
                 time=time,
@@ -151,7 +147,7 @@ class PatientUser(BasicUser):
 
         if now < first.time() or now > last.time():
             return None
-        # TODO подправить время интервала
+
         interval = dt.timedelta(hours=1) if state_name == 'MOR' \
             else dt.timedelta(minutes=30)
 
@@ -278,14 +274,6 @@ class PatientUser(BasicUser):
         Thread(target=self._threading_reg, args=(update, context)).start()
 
     def _threading_reg(self, update: Update, context: CallbackContext):
-        # TODO удалить кастомные настройки перед деплоем
-        # self.tz = pytz.timezone('Etc/GMT-3')
-        # self.times = {
-        #     'MOR': dt.datetime(1212, 12, 12, 8, 41, 0),
-        #     'EVE': dt.datetime(1212, 12, 12, 8, 42, 0)
-        # }
-
-        # Обрабатываем часовой пояс паципента при регистрации
         self.tz = pytz.timezone(convert_tz(self.location.get_coords(),
                                            self.location.time_zone()))
         self.orig_loc = self.location = Location(tz=-int(re.search(
@@ -325,7 +313,6 @@ class PatientUser(BasicUser):
     def check_user_reg(self):
         patient = get_patient_by_chat_id(self.chat_id)
         patronage = get_patronage_by_chat_id(self.chat_id)
-        # TODO добавить проверку по патронажу
         if patient or patronage:
             if not patronage and not patient.member:
                 return False
@@ -376,12 +363,12 @@ class PatronageUser(BasicUser):
     def register(self, update: Update, context: CallbackContext):
         super().register()
         logging.info(f'REGISTER NEW PATRONAGE: {update.effective_user.id}')
-        Thread(target=self._threading_reg, args=(update, context)).start()
+        Thread(target=self._threading_reg).start()
 
-    def restore(self, context):
+    def restore(self,):
         super().register()
 
-    def _threading_reg(self, update: Update, context: CallbackContext):
+    def _threading_reg(self):
         add_patronage(chat_id=self.chat_id)
 
     @staticmethod

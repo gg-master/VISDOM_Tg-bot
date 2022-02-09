@@ -1,4 +1,1 @@
-from . import patient
-from . import record
-from . import accept_time
-from . import patronage
+from . import accept_time, patient, patronage, record

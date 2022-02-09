@@ -1,13 +1,13 @@
+import csv
+from typing import Any
+
 from openpyxl import Workbook, styles
 
 from data import db_session
+from data.accept_time import AcceptTime
 from data.patient import Patient
 from data.patronage import Patronage
-from data.accept_time import AcceptTime
 from data.record import Record
-from typing import Any
-import csv
-
 
 db_session.global_init()
 
@@ -18,17 +18,18 @@ def create_session():
     db_sess.close()
 
 
-def get_accept_times_by_patient_id(id: int):
+def get_accept_times_by_patient_id(p_id: int):
     with db_session.create_session() as db_sess:
-        return db_sess.query(AcceptTime).filter(AcceptTime.patient_id == id).all()
+        return db_sess.query(AcceptTime).filter(
+            AcceptTime.patient_id == p_id).all()
 
 
-def add_accept_time(time, patient: Patient) -> None:
+def add_accept_time(time, patient: Patient) -> int:
     with db_session.create_session() as db_sess:
         accept_time = AcceptTime(time=time, patient=patient)
         db_sess.add(accept_time)
         db_sess.commit()
-    return accept_time.id
+        return accept_time.id
 
 
 def add_patient(time_morn, time_even, **kwargs: Any):
@@ -42,12 +43,14 @@ def add_patient(time_morn, time_even, **kwargs: Any):
 
 def get_patient_by_chat_id(chat_id: int) -> Patient:
     with db_session.create_session() as db_sess:
-        return db_sess.query(Patient).filter(Patient.chat_id == chat_id).first()
+        return db_sess.query(Patient).filter(
+            Patient.chat_id == chat_id).first()
 
 
 def get_patient_by_user_code(user_code: str) -> Patient:
     with db_session.create_session() as db_sess:
-        return db_sess.query(Patient).filter(Patient.user_code == user_code).first()
+        return db_sess.query(Patient).filter(
+            Patient.user_code == user_code).first()
 
 
 def get_all_patients() -> list:
@@ -55,9 +58,9 @@ def get_all_patients() -> list:
         return db_sess.query(Patient).all()
 
 
-def del_patient(id):
+def del_patient(p_id):
     with db_session.create_session() as db_sess:
-        patient = db_sess.query(Patient).filter_by(id=id).first()
+        patient = db_sess.query(Patient).filter_by(id=p_id).first()
         for accept_time in patient.accept_time:
             for record in accept_time.record:
                 db_sess.delete(record)
@@ -164,8 +167,8 @@ def make_file_patients():
                                   ' accept_time on patient.id = accept_time.'
                                   'Patient_id JOIN record on accept_time.id'
                                   ' = record.accept_time_id')
-    wb = Workbook()
-    ws = wb.active
+    # wb = Workbook()
+    # ws = wb.active
     headers = ['ID пациента', 'Код пациента', 'Систолическое давление',
                'Диастолическое давление', 'Частота сердечных сокращений',
                'Время приема таблеток и измерений', 'Часовой пояс',
@@ -188,16 +191,16 @@ def make_file_patients():
 
 
 def get_all_patients_v2():
-    dict = {}
+    dct = {}
     with db_session.create_session() as db_sess:
         patients = db_sess.query(Patient, AcceptTime.time).join(
             AcceptTime).group_by(Patient.id, AcceptTime.time).all()
         for patient in patients:
             if patient[0] not in dict:
-                dict[patient[0]] = [patient[1]]
+                dct[patient[0]] = [patient[1]]
             else:
-                dict[patient[0]].append(patient[1])
-        print(list(dict.items()))
+                dct[patient[0]].append(patient[1])
+        print(list(dct.items()))
 
 
 def make_patient_list():
@@ -211,5 +214,3 @@ def make_patient_list():
         if not patients_user_codes[i][1]:
             cell.fill = styles.PatternFill('solid', fgColor='FF0000')
     wb.save(filename=f'static/Список пациентов.xlsx')
-
-

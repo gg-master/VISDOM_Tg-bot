@@ -1,13 +1,47 @@
 import datetime as dt
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import CallbackQueryHandler, \
-    CallbackContext, CommandHandler, MessageHandler, Filters
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, error
+from telegram.ext import (CallbackContext, CallbackQueryHandler,
+                          CommandHandler, Filters, MessageHandler)
 
-from modules.timer import remove_job_if_exists, deleting_pre_start_msg_task
 from modules.dialogs_shortcuts.notification_shortcuts import *
 from modules.dialogs_shortcuts.start_shortcuts import START_OVER
+from modules.timer import deleting_pre_start_msg_task, remove_job_if_exists
 from tools.decorators import registered_patient
+
+
+class Notification:
+    @staticmethod
+    def start(update: Update, context: CallbackContext, **kwargs):
+        user = context.user_data['user']
+        text, keyboard = kwargs['text'], kwargs['keyboard']
+
+        if not context.user_data.get(START_OVER):
+            try:
+                update.callback_query.answer()
+                msg = update.callback_query.edit_message_text(
+                    text=text, reply_markup=keyboard)
+            except error.TelegramError:
+                return END
+        else:
+            # Если сообщения отличаются
+            # (т.е. сообщение обновилось, то завершаем диалог)
+            if user.is_msg_updated():
+                user.active_dialog_msg = None
+                return END
+
+            # Удаляем pre-start сообщение перед началом диалога
+            if not user.active_dialog_msg:
+                context.bot.delete_message(user.chat_id,
+                                           user.msg_to_del.message_id)
+
+            # Отправляем новое сообщение
+            msg = context.bot.send_message(
+                user.chat_id, text=text, reply_markup=keyboard)
+
+        user.msg_to_del = user.active_dialog_msg = msg
+
+        context.user_data[START_OVER] = False
 
 
 class PillTakingDialog(ConversationHandler):
@@ -45,7 +79,7 @@ class PillTakingDialog(ConversationHandler):
                'действия.' if not text else text
 
         buttons = [[InlineKeyboardButton(
-            text="Добавить ответ", callback_data=f'{PILL_TAKING}')]] \
+            text='Добавить ответ', callback_data=f'{PILL_TAKING}')]] \
             if not buttons else buttons
 
         keyboard = InlineKeyboardMarkup(buttons)
@@ -55,7 +89,6 @@ class PillTakingDialog(ConversationHandler):
         user.msg_to_del = msg
 
         # Само-удаление сообщения с возможностью добавить ответ на уведомление
-        # TODO изменить время для самоудаления сообщения
         remove_job_if_exists(f'{user.chat_id}-pre_start_msg', context)
         context.job_queue.run_once(
             callback=deleting_pre_start_msg_task,
@@ -67,9 +100,6 @@ class PillTakingDialog(ConversationHandler):
     @staticmethod
     @registered_patient
     def start(update: Update, context: CallbackContext):
-        # Получаем пользователя из задачи
-        user = context.user_data['user']
-
         response = context.user_data['user'].pill_response
 
         if not response:
@@ -94,33 +124,7 @@ class PillTakingDialog(ConversationHandler):
             if not response or 'Я не могу' not in response else '',
         ]
         keyboard = InlineKeyboardMarkup(buttons)
-
-        if not context.user_data.get(START_OVER):
-            try:
-                update.callback_query.answer()
-                msg = update.callback_query.edit_message_text(
-                    text=text, reply_markup=keyboard)
-            except Exception as e:
-                return END
-        else:
-            # Если сообщения отличаются
-            # (т.е. сообщение обновилось, то завершаем диалог)
-            if user.is_msg_updated():
-                user.active_dialog_msg = None
-                return END
-
-            # Удаляем pre-start сообщение перед началом диалога
-            if not user.active_dialog_msg:
-                context.bot.delete_message(user.chat_id,
-                                           user.msg_to_del.message_id)
-
-            # Отправляем новое сообщение
-            msg = context.bot.send_message(
-                user.chat_id, text=text, reply_markup=keyboard)
-
-        user.msg_to_del = user.active_dialog_msg = msg
-
-        context.user_data[START_OVER] = False
+        Notification.start(update, context, text=text, keyboard=keyboard)
         return PILL_TAKING_ACTION
 
     @staticmethod
@@ -132,7 +136,7 @@ class PillTakingDialog(ConversationHandler):
     @staticmethod
     def reason(update: Update, context: CallbackContext):
         """Запрашивает у пользователя причину"""
-        text = "Опишите вашу причину"
+        text = 'Опишите вашу причину'
         if not context.user_data[START_OVER]:
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text)
@@ -159,7 +163,7 @@ class PillTakingDialog(ConversationHandler):
     @staticmethod
     def end(update: Update, context: CallbackContext):
         """Завершение первого утреннего диалога"""
-        text = "Мы сохранили Ваш ответ. Спасибо!"
+        text = 'Мы сохранили Ваш ответ. Спасибо!'
 
         update.callback_query.answer()
         update.callback_query.edit_message_text(text=text)
@@ -189,7 +193,6 @@ class DataCollectionDialog(ConversationHandler):
     def __init__(self):
         super().__init__(
             name=self.__class__.__name__,
-            # TODO подправить время
             conversation_timeout=dt.timedelta(hours=1, minutes=30),
             entry_points=[CallbackQueryHandler(self.start,
                                                pattern=f'^{DATA_COLLECT}$')],
@@ -220,7 +223,7 @@ class DataCollectionDialog(ConversationHandler):
                 'Нажмите "Добавить ответ", чтобы мы могли зафиксировать ' \
                 'ваши действия.'
 
-        buttons = [[InlineKeyboardButton(text="Добавить ответ",
+        buttons = [[InlineKeyboardButton(text='Добавить ответ',
                                          callback_data=f'{DATA_COLLECT}')]]
         PillTakingDialog.pre_start(context, data, text=text, buttons=buttons)
 
@@ -247,9 +250,9 @@ class DataCollectionDialog(ConversationHandler):
         sys, dias, heart = response.values()
         if any(response.values()):
             text += f'\nВаши данные:'
-            text += ("\nСАД: " + str(sys)) if sys else ''
-            text += ("\nДАД: " + str(dias)) if dias else ''
-            text += ("\nЧСС: " + str(heart)) if heart else ''
+            text += ('\nСАД: ' + str(sys)) if sys else ''
+            text += ('\nДАД: ' + str(dias)) if dias else ''
+            text += ('\nЧСС: ' + str(heart)) if heart else ''
 
         keyboard = InlineKeyboardMarkup(
             [
@@ -264,30 +267,7 @@ class DataCollectionDialog(ConversationHandler):
                  if not heart else 'Изменить ЧСС', callback_data=f'HEART')],
             ]
         )
-        if not context.user_data.get(START_OVER):
-            try:
-                update.callback_query.answer()
-                msg = update.callback_query.edit_message_text(
-                    text=text, reply_markup=keyboard)
-            except Exception as e:
-                return END
-        else:
-            # Если сообщения отличаются
-            # (т.е. сообщение обновилось, то завершаем диалог)
-            if user.is_msg_updated():
-                user.active_dialog_msg = None
-                return END
-            # Удаляем pre-start сообщение перед началом диалога
-            if not user.active_dialog_msg:
-                context.bot.delete_message(user.chat_id,
-                                           user.msg_to_del.message_id)
-            # Отправляем новое сообщение
-            msg = context.bot.send_message(
-                user.chat_id, text=text, reply_markup=keyboard)
-
-        user.msg_to_del = user.active_dialog_msg = msg
-
-        context.user_data[START_OVER] = False
+        Notification.start(update, context, text=text, keyboard=keyboard)
         return DATA_COLLECT_ACTION
 
     @staticmethod
@@ -337,7 +317,7 @@ class DataCollectionDialog(ConversationHandler):
         # Очищаем ответы для новых записей
         user.clear_responses()
 
-        text = "Мы сохранили Ваш ответ. Спасибо!"
+        text = 'Мы сохранили Ваш ответ. Спасибо!'
 
         update.callback_query.answer()
         update.callback_query.edit_message_text(text=text)
