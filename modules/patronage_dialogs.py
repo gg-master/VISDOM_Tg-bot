@@ -156,7 +156,7 @@ class PatronageJob(ConversationHandler):
         try:
             update.effective_chat.send_document(
                 open('static/Список пациентов.xlsx', 'rb'))
-            # remove('static/Список пациентов.xlsx')
+            remove('static/Список пациентов.xlsx')
         except FileNotFoundError as ex:
             print(ex)
             update.effective_chat.send_message(
