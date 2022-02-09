@@ -269,7 +269,6 @@ class PatientRegistrationDialog(ConversationHandler):
 class ConfigureTZDialog(ConversationHandler):
     def __init__(self, loc_d=None, **kwargs):
         from modules.location import FindLocationDialog
-        from modules.settings_dialogs import SettingsDialog
         super().__init__(
             name=self.__class__.__name__,
             entry_points=[

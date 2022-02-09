@@ -4,13 +4,15 @@ from telegram.ext import ConversationHandler, MessageHandler, Filters, \
 
 from modules.dialogs_shortcuts.start_shortcuts import SEND_USER_DATA_PAT, END,\
     EXCLUDE_PATIENT
-from modules.users_classes import PatientUser, PatronageUser
-from tools.decorators import registered_patronages
-from db_api import get_patient_by_chat_id, get_patient_by_user_code, \
+
+from db_api import get_patient_by_user_code, \
     make_file_by_patient_user_code, make_file_patients, make_patient_list, \
     patient_exists_by_user_code, change_patients_membership
-from modules.timer import remove_job_if_exists
+
 from os import remove
+from modules.patient_list import patient_list
+from modules.timer import remove_job_if_exists
+from tools.decorators import registered_patronages
 
 
 class PatronageJob(ConversationHandler):
@@ -93,7 +95,6 @@ class PatronageJob(ConversationHandler):
                 'Пациента с таким кодом не существует')
         return END
 
-
     @staticmethod
     @registered_patronages
     def exclude_patient(update: Update, context: CallbackContext):
@@ -101,28 +102,21 @@ class PatronageJob(ConversationHandler):
         patient = get_patient_by_user_code(user_code)
         if patient:
             change_patients_membership(user_code, False)
-            PatronageJob.remove_jobs((f'{patient.chat_id}-MOR',
-                                      f'{patient.chat_id}-EVE',
-                                      f'{patient.chat_id}-rep_task'), context)
-            context.bot.send_message(patient.chat_id, 'Вы были исключны из'
-                                                      ' исследования.'
-                                                      ' Если это ошибка,'
-                                                      ' обратитесь к врачу')
-            update.message.reply_text('Вы успешно исключили пациента'
-                                      ' из исследования')
-        else:
-            update.message.reply_text('Пациента с таким кодом не существует')
-        return END
 
-    @staticmethod
-    def remove_jobs(tasks: tuple, context: CallbackContext):
-        for task in tasks:
-            remove_job_if_exists(task, context)
+            patient_list[patient.chat_id].change_membership(context)
+
+            context.bot.send_message(patient.chat_id,
+                                     'Вы были исключны из исследования.\n'
+                                     'Если это ошибка, обратитесь к врачу.')
+            update.message.reply_text(f'Пациент {user_code} был исключен из '
+                                      f'исследования.')
+        else:
+            update.message.reply_text('Пациента с таким кодом не существует.')
+        return END
 
     @staticmethod
     @registered_patronages
     def alarm_send_p_data(update: Update, context: CallbackContext):
-        # TODO проработка диалога аларма
         data = update.callback_query.data
         user_code = data[data.find('&') + 1:]
 

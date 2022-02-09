@@ -78,6 +78,13 @@ class PatientUser(BasicUser):
         self.pill_response = None
         self.data_response = {'sys': None, 'dias': None, 'heart': None}
 
+    def change_membership(self, context: CallbackContext):
+        self.is_registered = False
+
+        for task in (f'{self.chat_id}-MOR', f'{self.chat_id}-EVE',
+                     f'{self.chat_id}-rep_task'):
+            remove_job_if_exists(task, context)
+
     def str_times(self):
         return dict(map(lambda x: (x, self.times[x].strftime("%H:%M")),
                         self.times.keys()))
@@ -144,8 +151,8 @@ class PatientUser(BasicUser):
         if now < first.time() or now > last.time():
             return None
         # TODO подправить время интервала
-        interval = dt.timedelta(minutes=2) if state_name == 'MOR' \
-            else dt.timedelta(minutes=2)
+        interval = dt.timedelta(hours=1) if state_name == 'MOR' \
+            else dt.timedelta(minutes=30)
 
         f = dt.timedelta(hours=first.hour, minutes=first.minute)
         n = dt.timedelta(hours=now.hour, minutes=now.minute)
@@ -271,11 +278,11 @@ class PatientUser(BasicUser):
 
     def _threading_reg(self, update: Update, context: CallbackContext):
         # TODO удалить кастомные настройки перед деплоем
-        self.tz = pytz.timezone('Etc/GMT-3')
-        self.times = {
-            'MOR': dt.datetime(1212, 12, 12, 8, 41, 0),
-            'EVE': dt.datetime(1212, 12, 12, 8, 42, 0)
-        }
+        # self.tz = pytz.timezone('Etc/GMT-3')
+        # self.times = {
+        #     'MOR': dt.datetime(1212, 12, 12, 8, 41, 0),
+        #     'EVE': dt.datetime(1212, 12, 12, 8, 42, 0)
+        # }
 
         # Обрабатываем часовой пояс паципента при регистрации
         self.tz = pytz.timezone(convert_tz(self.location.get_coords(),
@@ -317,8 +324,8 @@ class PatientUser(BasicUser):
         patient = get_patient_by_chat_id(self.chat_id)
         patronage = get_patronage_by_chat_id(self.chat_id)
         # TODO добавить проверку по патронажу
-        if patient:
-            if not patient.member:
+        if patient or patronage:
+            if not patronage and not patient.member:
                 return False
             return None
         return True
@@ -380,7 +387,6 @@ class PatronageUser(BasicUser):
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
         user = kwargs['user']
-        # TODO проработать общение касаемо аларма
         patronage = get_all_patronages()
         if patronage:
             patronage = patronage[0]

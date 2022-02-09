@@ -1,3 +1,5 @@
+import logging
+
 import pytz
 import datetime as dt
 
@@ -59,8 +61,12 @@ def daily_task(context: CallbackContext):
     # то удаляем его
     # TODO фикс бага при удалении сообщения
     if user.msg_to_del:
-        context.bot.delete_message(user.chat_id,
-                                   user.msg_to_del.message_id)
+        try:
+            context.bot.delete_message(user.chat_id,
+                                       user.msg_to_del.message_id)
+        except Exception as e:
+            logging.exception(f'Cant find message id to delete in daily task. '
+                              f'More:{e}')
     remove_job_if_exists(f'{user.chat_id}-rep_task', context)
 
     # Если с момента последней записи прошло более 24 часов, то устанавливаем
