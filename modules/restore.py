@@ -5,7 +5,7 @@ from telegram.ext import CallbackContext
 
 
 from db_api import get_accept_times_by_patient_id, get_all_patients, \
-    get_patient_by_chat_id, get_all_patronages
+    get_all_patronages
 from tools.decorators import not_registered_users
 from modules.patient_list import patient_list
 
@@ -81,7 +81,8 @@ class Restore:
             context.bot.send_message(
                 kwargs['chat_id'], text=text, reply_markup=keyboard)
         except Exception as e:
-            logging.warning("CANT SEND RESTORE_MSG TO PATRONAGE. CHAT NOT FOUND")
+            logging.warning(f"CANT SEND RESTORE_MSG TO PATRONAGE. "
+                            f"CHAT NOT FOUND. \nMORE: {e}")
 
 
 @not_registered_users
@@ -109,10 +110,10 @@ def patient_restore_handler(update: Update, context: CallbackContext):
         'Доступ восстановлен. Теперь Вы можете добавить ответ на уведомления, '
         'к которым не было доступа.')
     PatientRegistrationDialog.restore_main_msg(update, context)
-    print(context.job_queue.get_jobs_by_name(
-        f'{user.chat_id}-MOR')[0].next_t)
-    print(context.job_queue.get_jobs_by_name(
-        f'{user.chat_id}-EVE')[0].next_t)
+    # print(context.job_queue.get_jobs_by_name(
+    #     f'{user.chat_id}-MOR')[0].next_t)
+    # print(context.job_queue.get_jobs_by_name(
+    #     f'{user.chat_id}-EVE')[0].next_t)
 
     # Если уже пришло уведомление, то переотправляем его после восстановления
     if user.msg_to_del:
@@ -136,4 +137,5 @@ def patronage_restore_handler(update: Update, context: CallbackContext):
         update.effective_chat.send_message('Доступ восстановлен.')
         PatronageJob.default_job(update, context)
     except Exception as e:
-        logging.warning("CANT SEND RESTORE_MSG TO PATIENT. CHAT NOT FOUND")
+        logging.warning(f"CANT SEND RESTORE_MSG TO PATIENT. CHAT NOT FOUND."
+                        f"\nMORE: {e}")
