@@ -32,7 +32,9 @@ class SettingsDialog(ConversationHandler):
             },
             fallbacks=[
                  CallbackQueryHandler(self.stop, pattern=f'CANCEL'),
-                 CommandHandler('stop', self.stop)]
+                 CommandHandler('stop', self.stop),
+                 MessageHandler(Filters.regex('Настройки$'), self.restart)
+            ]
         )
 
     @staticmethod
@@ -77,7 +79,7 @@ class SettingsDialog(ConversationHandler):
                                                     reply_markup=keyboard)
         else:
             msg = update.message.reply_text(text=text, reply_markup=keyboard)
-            context.chat_data['st_msg'] = msg
+            context.chat_data['st_msg'] = msg.message_id
         context.user_data[START_OVER] = False
         return SETTINGS_ACTION
 
@@ -120,7 +122,7 @@ class SettingsDialog(ConversationHandler):
             update.callback_query.delete_message()
         elif context.chat_data.get('st_msg'):
             context.bot.delete_message(update.effective_chat.id,
-                                       context.chat_data['st_msg'].message_id)
+                                       context.chat_data['st_msg'])
 
         update.effective_chat.send_message(text=text, reply_markup=keyboard)
         return END
@@ -130,13 +132,25 @@ class SettingsDialog(ConversationHandler):
         SettingsDialog.stop(update, context)
         return STOPPING
 
+    @staticmethod
+    @registered_patient
+    def restart(update: Update, context: CallbackContext):
+        try:
+            context.bot.delete_message(update.effective_chat.id,
+                                       context.chat_data['st_msg'])
+        except Exception as e:
+            print(e)
+        finally:
+            return SettingsDialog.start(update, context)
+
 
 class SettingsConfNotifTimeDialog(ConfigureNotifTimeDialog):
     def __init__(self):
         super().__init__(stop_cb=SettingsDialog.stop_nested)
         self.map_to_parent.update({
+            SETTINGS_ACTION: SETTINGS_ACTION,
             STOPPING: END,
-            END: END
+            END: END,
         })
 
     @staticmethod
@@ -159,10 +173,16 @@ class SettingsConfTZDialog(ConfigureTZDialog):
     def __init__(self):
         from modules.location import ChangeLocationDialog
         super().__init__(ChangeLocationDialog,
-                         stop_cb=SettingsDialog.stop_nested)
+                         ex_fallbacks=[
+                             CommandHandler('stop', SettingsDialog.stop_nested,
+                                            run_async=False),
+                             MessageHandler(Filters.regex('Настройки$'),
+                                            SettingsDialog.restart,
+                                            run_async=False)
+                         ])
         self.map_to_parent.update({
+            SETTINGS_ACTION: SETTINGS_ACTION,
             STOPPING: END,
-            SETTINGS_ACTION: SETTINGS_ACTION
         })
 
     @staticmethod

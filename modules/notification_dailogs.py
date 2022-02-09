@@ -59,8 +59,8 @@ class PillTakingDialog(ConversationHandler):
         remove_job_if_exists(f'{user.chat_id}-pre_start_msg', context)
         context.job_queue.run_once(
             callback=deleting_pre_start_msg_task,
-            when=dt.timedelta(hours=1, minutes=30),
-            context={'user': user, 'msg_id': msg.message_id},
+            when=dt.timedelta(minutes=1),
+            context={'user': user},
             name=f'{user.chat_id}-pre_start_msg'
         )
 
@@ -96,9 +96,12 @@ class PillTakingDialog(ConversationHandler):
         keyboard = InlineKeyboardMarkup(buttons)
 
         if not context.user_data.get(START_OVER):
-            update.callback_query.answer()
-            msg = update.callback_query.edit_message_text(
-                text=text, reply_markup=keyboard)
+            try:
+                update.callback_query.answer()
+                msg = update.callback_query.edit_message_text(
+                    text=text, reply_markup=keyboard)
+            except Exception as e:
+                return END
         else:
             # Если сообщения отличаются
             # (т.е. сообщение обновилось, то завершаем диалог)
@@ -186,9 +189,8 @@ class DataCollectionDialog(ConversationHandler):
     def __init__(self):
         super().__init__(
             name=self.__class__.__name__,
-            conversation_timeout=dt.timedelta(
-                # hours=1,
-                minutes=2),
+            # TODO подправить время
+            conversation_timeout=dt.timedelta(hours=1, minutes=30),
             entry_points=[CallbackQueryHandler(self.start,
                                                pattern=f'^{DATA_COLLECT}$')],
             states={
@@ -263,9 +265,12 @@ class DataCollectionDialog(ConversationHandler):
             ]
         )
         if not context.user_data.get(START_OVER):
-            update.callback_query.answer()
-            msg = update.callback_query.edit_message_text(
-                text=text, reply_markup=keyboard)
+            try:
+                update.callback_query.answer()
+                msg = update.callback_query.edit_message_text(
+                    text=text, reply_markup=keyboard)
+            except Exception as e:
+                return END
         else:
             # Если сообщения отличаются
             # (т.е. сообщение обновилось, то завершаем диалог)

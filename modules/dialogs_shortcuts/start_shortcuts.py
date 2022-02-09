@@ -37,10 +37,11 @@ END = ConversationHandler.END
 (
     # Other states
     STOPPING,
+    RESTART,
     # Other constants
     START_OVER,
     FINISH_REGISTRATION,
-) = map(chr, range(13, 16))
+) = map(chr, range(13, 17))
 
 
 (
@@ -48,4 +49,4 @@ END = ConversationHandler.END
     TYPING_TOKEN,
     SEND_USER_DATA_PAT,
     EXCLUDE_PATIENT
-) = map(chr, range(16, 20))
+) = map(chr, range(17, 21))
