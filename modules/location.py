@@ -12,7 +12,7 @@ from modules.dialogs_shortcuts.start_shortcuts import (
     CONF_LOCATION,
     START_OVER,
     STOPPING,
-    END,
+    END, START_SELECTORS,
 )
 
 
@@ -80,11 +80,12 @@ class FindLocationDialog(ConversationHandler):
             },
             fallbacks=[
                 CommandHandler('stop', StartDialog.stop_nested,
-                               run_async=False)
-                if not kwargs.get('fallbacks') else kwargs.get('fallbacks')
-            ]
+                               run_async=False),
+                CommandHandler('start', StartDialog.restart, run_async=False)
+            ] if not kwargs.get('fallbacks') else kwargs.get('fallbacks')
             ,
             map_to_parent={
+                START_SELECTORS: START_SELECTORS,
                 PATIENT_REGISTRATION_ACTION: END,
                 STOPPING: STOPPING,
             }
@@ -107,11 +108,11 @@ class FindLocationDialog(ConversationHandler):
             if context.chat_data.get('st_msg'):
                 context.chat_data['st_msg'] = None
 
-        context.bot.send_message(
+        msg = context.bot.send_message(
             update.effective_chat.id,
             text='Выберите способ добавления местоположения',
             reply_markup=kboard)
-
+        context.chat_data['st_msg'] = msg.message_id
         context.user_data[START_OVER] = False
         return 1
 
@@ -238,10 +239,15 @@ class ChangeLocationDialog(FindLocationDialog):
     def __init__(self):
         from modules.settings_dialogs import SETTINGS_ACTION, SettingsDialog
         super().__init__(
-            fallbacks=CommandHandler('stop', SettingsDialog.stop_nested,
-                                     run_async=False))
+            fallbacks=[
+                CommandHandler('stop', SettingsDialog.stop_nested,
+                               run_async=False),
+                MessageHandler(Filters.regex('Настройки$'),
+                               SettingsDialog.restart, run_async=False)
+            ]
+        )
         self.map_to_parent.update({
-            SETTINGS_ACTION: END,
+            SETTINGS_ACTION: SETTINGS_ACTION,
             STOPPING: STOPPING
         })
 

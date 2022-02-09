@@ -37,14 +37,15 @@ END = ConversationHandler.END
 (
     # Other states
     STOPPING,
+    RESTART,
     # Other constants
     START_OVER,
     FINISH_REGISTRATION,
-) = map(chr, range(13, 16))
+) = map(chr, range(13, 17))
 
 
 (
     PATRONAGE_REGISTRATION_ACTION,
     TYPING_TOKEN,
     SEND_USER_DATA_PAT,
-) = map(chr, range(16, 19))
+) = map(chr, range(17, 20))

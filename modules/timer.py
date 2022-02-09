@@ -27,7 +27,8 @@ def create_daily_notification(context: CallbackContext, **kwargs):
             time=kwargs['time'],
             context=kwargs,
             name=f'{chat_id}-{kwargs["name"]}',
-            job_kwargs={'next_run_time': kwargs['next_run_time']},
+            job_kwargs={'next_run_time': kwargs['next_run_time']}
+            if kwargs['next_run_time'] else {},
         )
     except (IndexError, ValueError):
         context.bot.send_message(chat_id, 'Произошла ошибка про попытке '
@@ -56,6 +57,7 @@ def daily_task(context: CallbackContext):
 
     # Если пользователь не ответил на предыдущее сообщение (уведомление),
     # то удаляем его
+    # TODO фикс бага при удалении сообщения
     if user.msg_to_del:
         context.bot.delete_message(user.chat_id,
                                    user.msg_to_del.message_id)
@@ -102,7 +104,8 @@ def deleting_pre_start_msg_task(context: CallbackContext):
     data = job.context
     try:
         user = data['user']
-        context.bot.delete_message(user.chat_id, data['msg_id'])
+        context.bot.delete_message(user.chat_id, user.msg_to_del.message_id)
+        user.msg_to_del = None
         # Проверяем последний рекорд и при необходимости бъем тревогу
         user.check_user_records(context)
     except Exception as e:

@@ -59,8 +59,8 @@ class PillTakingDialog(ConversationHandler):
         remove_job_if_exists(f'{user.chat_id}-pre_start_msg', context)
         context.job_queue.run_once(
             callback=deleting_pre_start_msg_task,
-            when=dt.timedelta(hours=1, minutes=30),
-            context={'user': user, 'msg_id': msg.message_id},
+            when=dt.timedelta(minutes=1),
+            context={'user': user},
             name=f'{user.chat_id}-pre_start_msg'
         )
 

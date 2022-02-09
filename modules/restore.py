@@ -92,23 +92,30 @@ def patient_restore_handler(update: Update, context: CallbackContext):
     user = context.user_data['user'] = patient_list[update.effective_chat.id]
 
     logging.info(f'RESTORED PATIENT: {user.chat_id}')
+
+    # Если уже пришло уведомление, то переотправляем его после восстановления
+    if user.msg_to_del:
+        # Получаем id сообщения из таска, который автоматически удалит
+        # сообщение через некоторое время
+        try:
+            context.bot.delete_message(user.chat_id,
+                                       user.msg_to_del.message_id)
+        except Exception as e:
+            pass
+
+    # Удаляем сообщени с кнопкой восстановления
     update.callback_query.delete_message()
     update.effective_chat.send_message(
         'Доступ восстановлен. Теперь Вы можете добавить ответ на уведомления, '
         'к которым не было доступа.')
     PatientRegistrationDialog.restore_main_msg(update, context)
+    print(context.job_queue.get_jobs_by_name(
+        f'{user.chat_id}-MOR')[0].next_t)
+    print(context.job_queue.get_jobs_by_name(
+        f'{user.chat_id}-EVE')[0].next_t)
 
     # Если уже пришло уведомление, то переотправляем его после восстановления
-    pre_start_msg = context.job_queue.get_jobs_by_name(
-        f'{user.chat_id}-pre_start_msg')
-
-    # Если уже установлено событие на удаление уведомления
-    if pre_start_msg:
-        # Получаем id сообщения из таска, который автоматически удалит
-        # сообщение через некоторое время
-        msg_id = pre_start_msg[0].context['msg_id']
-        context.bot.delete_message(user.chat_id, msg_id)
-
+    if user.msg_to_del:
         # Снова отображаем удаленное уведомление
         user.notification_states[user.state()[0]][
             user.state()[1]].pre_start(
