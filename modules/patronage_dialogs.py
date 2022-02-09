@@ -2,11 +2,17 @@ from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ConversationHandler, MessageHandler, Filters, \
     CommandHandler, CallbackContext, CallbackQueryHandler
 
-from modules.dialogs_shortcuts.start_shortcuts import SEND_USER_DATA_PAT, END
-from modules.users_classes import PatientUser, PatronageUser
+from modules.dialogs_shortcuts.start_shortcuts import SEND_USER_DATA_PAT, END,\
+    EXCLUDE_PATIENT
+
+from db_api import get_patient_by_user_code, \
+    make_file_by_patient_user_code, make_file_patients, make_patient_list, \
+    patient_exists_by_user_code, change_patients_membership
+
+from os import remove
+from modules.patient_list import patient_list
+from modules.timer import remove_job_if_exists
 from tools.decorators import registered_patronages
-from db_api import get_patient_by_chat_id, get_patient_by_user_code, \
-    make_file_by_patient_user_code, make_file_patients, make_patient_list
 
 
 class PatronageJob(ConversationHandler):
@@ -21,6 +27,9 @@ class PatronageJob(ConversationHandler):
                     PatronageJob.send_users_data),
                 MessageHandler(Filters.regex('^Получить список пациентов$'),
                                PatronageJob.send_patients_list),
+                MessageHandler(Filters.regex('^Исключить пациента из'
+                                             ' исследования$'),
+                               PatronageJob.exclude_patient_state),
                 CallbackQueryHandler(self.alarm_send_p_data,
                                      pattern='^A_PATIENT_DATA')
             ],
@@ -28,6 +37,10 @@ class PatronageJob(ConversationHandler):
                 SEND_USER_DATA_PAT: [
                     MessageHandler(Filters.text & ~Filters.command,
                                    self.send_user_data)
+                ],
+                EXCLUDE_PATIENT: [
+                    MessageHandler(Filters.text & ~Filters.command,
+                                   self.exclude_patient)
                 ]
             },
             fallbacks=[CommandHandler('stop', self.stop)],
@@ -41,7 +54,9 @@ class PatronageJob(ConversationHandler):
         keyboard = ReplyKeyboardMarkup(
             [['Получить данные по пациенту',
               'Получить данные по всем пользователям'],
-             ['Получить список пациентов']], row_width=1, resize_keyboard=True)
+             ['Получить список пациентов',
+              'Исключить пациента из исследования']],
+            row_width=1, resize_keyboard=True)
 
         update.effective_chat.send_message(text=text, reply_markup=keyboard)
 
@@ -54,37 +69,60 @@ class PatronageJob(ConversationHandler):
 
     @staticmethod
     @registered_patronages
+    def exclude_patient_state(update: Update, context: CallbackContext):
+        text = 'Введите код пациента'
+        update.effective_chat.send_message(text)
+        return EXCLUDE_PATIENT
+
+    @staticmethod
+    @registered_patronages
     def send_user_data(update: Update, context: CallbackContext):
         user_code = update.message.text
-        try:
-            patient = get_patient_by_user_code(user_code)
-            if patient:
+        if patient_exists_by_user_code(user_code):
+            try:
                 make_file_by_patient_user_code(user_code)
                 update.effective_chat.send_document(
                     open(f'static/{user_code}_data.xlsx', 'rb'))
-            else:
+                remove(f'static/{user_code}_data.xlsx')
+            except FileNotFoundError as ex:
+                print(ex)
                 update.message.reply_text(
-                    'Пациента с таким кодом не существует')
-        except FileNotFoundError as e:
-            print(e)
+                    'Файл не найден. Обратитесь к администратору.')
+            except Exception as ex:
+                print(ex)
+        else:
             update.message.reply_text(
-                'Файл не найден. Обратитесь к администратору.')
-        except Exception as e:
-            print(e)
-        finally:
-            return END
+                'Пациента с таким кодом не существует')
+        return END
+
+    @staticmethod
+    @registered_patronages
+    def exclude_patient(update: Update, context: CallbackContext):
+        user_code = update.message.text
+        patient = get_patient_by_user_code(user_code)
+        if patient:
+            change_patients_membership(user_code, False)
+
+            patient_list[patient.chat_id].change_membership(context)
+
+            context.bot.send_message(patient.chat_id,
+                                     'Вы были исключны из исследования.\n'
+                                     'Если это ошибка, обратитесь к врачу.')
+            update.message.reply_text(f'Пациент {user_code} был исключен из '
+                                      f'исследования.')
+        else:
+            update.message.reply_text('Пациента с таким кодом не существует.')
+        return END
 
     @staticmethod
     @registered_patronages
     def alarm_send_p_data(update: Update, context: CallbackContext):
-        # TODO проработка диалога аларма
         data = update.callback_query.data
         user_code = data[data.find('&') + 1:]
 
         make_file_by_patient_user_code(user_code)
         update.effective_chat.send_document(
             open(f'static/{user_code}_data.xlsx', 'rb'))
-
         context.bot.edit_message_reply_markup(
             update.effective_chat.id, update.effective_message.message_id)
 
@@ -92,16 +130,34 @@ class PatronageJob(ConversationHandler):
     @registered_patronages
     def send_users_data(update: Update, context: CallbackContext):
         make_file_patients()
-        update.effective_chat.send_document(
-            open('static/statistics.xlsx', 'rb'))
+        try:
+            update.effective_chat.send_document(
+                open('static/statistics.csv', 'rb'))
+            remove('static/statistics.csv')
+        except FileNotFoundError as ex:
+            print(ex)
+            update.effective_chat.send_message(
+                'Файл не найден. Обратитесь к администратору.'
+            )
+        except Exception as ex:
+            print(ex)
         return END
 
     @staticmethod
     @registered_patronages
     def send_patients_list(update: Update, context: CallbackContext):
         make_patient_list()
-        update.effective_chat.send_document(
-            open('static/Список пациентов.txt', 'rb'))
+        try:
+            update.effective_chat.send_document(
+                open('static/Список пациентов.xlsx', 'rb'))
+            remove('static/Список пациентов.xlsx')
+        except FileNotFoundError as ex:
+            print(ex)
+            update.effective_chat.send_message(
+                'Файл не найден. Обратитесь к администратору.'
+            )
+        except Exception as ex:
+            print(ex)
         return END
 
     @staticmethod

@@ -1,4 +1,4 @@
-import openpyxl
+from openpyxl import Workbook, styles
 
 from data import db_session
 from data.patient import Patient
@@ -6,6 +6,7 @@ from data.patronage import Patronage
 from data.accept_time import AcceptTime
 from data.record import Record
 from typing import Any
+import csv
 
 
 db_session.global_init()
@@ -81,12 +82,17 @@ def change_accept_time(accept_time_id, time):
         db_sess.commit()
 
 
-def change_patients_membership(chat_id: int, member: bool) -> None:
+def change_patients_membership(user_code: str, member: bool) -> None:
     with db_session.create_session() as db_sess:
-        patient = get_patient_by_chat_id(chat_id)
+        patient = get_patient_by_user_code(user_code)
         patient.member = member
         db_sess.add(patient)
         db_sess.commit()
+
+
+def patient_exists_by_user_code(user_code):
+    with db_session.create_session() as db_sess:
+        return db_sess.query(db_sess.query(Patient).filter(Patient.user_code == user_code).exists()).scalar()
 
 
 def add_patronage(**kwargs: Any) -> None:
@@ -130,12 +136,12 @@ def make_file_by_patient_user_code(user_code):
                   accept_time.Patient_id JOIN record on accept_time.id = 
                   record.accept_time_id WHERE patient.user_code like 
                   '{user_code}'""")
-    wb = openpyxl.Workbook()
-    ws = wb.active
     headers = ['Систолическое давление', 'Диастолическое давление',
                'Частота сердечных сокращений',
                'Время приема таблеток и измерений', 'Часовой пояс',
                'Время ответа', 'Комментарий']
+    wb = Workbook()
+    ws = wb.active
     for i in range(len(headers)):
         ws.cell(row=1, column=i + 1, value=headers[i])
     i = 2
@@ -156,20 +162,26 @@ def make_file_patients():
                                   ' accept_time on patient.id = accept_time.'
                                   'Patient_id JOIN record on accept_time.id'
                                   ' = record.accept_time_id')
-    wb = openpyxl.Workbook()
+    wb = Workbook()
     ws = wb.active
     headers = ['ID пациента', 'Код пациента', 'Систолическое давление',
                'Диастолическое давление', 'Частота сердечных сокращений',
                'Время приема таблеток и измерений', 'Часовой пояс',
                'Время ответа', 'Комментарий']
-    for i in range(len(headers)):
-        ws.cell(row=1, column=i + 1, value=headers[i])
-    i = 2
-    for record in records:
-        for j in range(9):
-            ws.cell(row=i, column=j+1, value=record[j])
-        i += 1
-    wb.save(filename='static/statistics.xlsx')
+    with open('static/statistics.csv', 'w', encoding='utf-8', newline='') as csvfile:
+        writer = csv.writer(csvfile, delimiter=';', quotechar='"',
+                            quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(headers)
+        for record in records:
+            writer.writerow(record)
+    # for i in range(len(headers)):
+    #     ws.cell(row=1, column=i + 1, value=headers[i])
+    # i = 2
+    # for record in records:
+    #     for j in range(9):
+    #         ws.cell(row=i, column=j+1, value=record[j])
+    #     i += 1
+    # wb.save(filename='static/statistics.xlsx')
 
 
 def get_all_patients_v2():
@@ -186,6 +198,13 @@ def get_all_patients_v2():
 
 def make_patient_list():
     with db_session.create_session() as db_sess:
-        patients_user_codes = db_sess.query(Patient.user_code).all()
-    with open('static/Список пациентов.txt', 'w') as f:
-        f.write('\n'.join(list(map(lambda x: x[0], patients_user_codes))))
+        patients_user_codes = db_sess.query(Patient.user_code, Patient.member).all()
+    wb = Workbook()
+    ws = wb.active
+    for i in range(len(patients_user_codes)):
+        cell = ws.cell(row=i+1, column=1, value=patients_user_codes[i][0])
+        if patients_user_codes[i][1]:
+            cell.fill = styles.PatternFill('solid', fgColor='FF0000')
+    wb.save(filename=f'static/Список пациентов.xlsx')
+
+

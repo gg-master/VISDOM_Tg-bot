@@ -40,7 +40,7 @@ class StartDialog(ConversationHandler):
                                   PatronageRegistrationDialog()],
             },
             fallbacks=[CommandHandler('stop', self.stop),
-                       CommandHandler('start', self.start)])
+                       CommandHandler('start', self.restart)])
 
     @staticmethod
     @user_separation
@@ -72,6 +72,8 @@ class StartDialog(ConversationHandler):
 
     @staticmethod
     def stop(update: Update, context: CallbackContext):
+        context.bot.delete_message(update.effective_chat.id,
+                                   context.chat_data['st_msg'])
         keyboard = ReplyKeyboardMarkup([['/start']],
                                        row_width=1, resize_keyboard=True)
         update.message.reply_text(text='Регистрация прервана.\nЧтобы повторно '
@@ -83,6 +85,16 @@ class StartDialog(ConversationHandler):
     def stop_nested(update: Update, context: CallbackContext):
         StartDialog.stop(update, context)
         return STOPPING
+
+    @staticmethod
+    def restart(update: Update, context: CallbackContext):
+        try:
+            context.bot.delete_message(update.effective_chat.id,
+                                       context.chat_data['st_msg'])
+        except Exception as e:
+            pass
+        finally:
+            return StartDialog.start(update, context)
 
 
 class PatientRegistrationDialog(ConversationHandler):
@@ -111,9 +123,11 @@ class PatientRegistrationDialog(ConversationHandler):
                 CallbackQueryHandler(self.back_to_start, pattern=f'^{END}$'),
                 CommandHandler('stop', StartDialog.stop_nested,
                                run_async=False),
+                CommandHandler('start', StartDialog.restart, run_async=False)
             ],
             map_to_parent={
                 STOPPING: END,
+                START_SELECTORS: START_SELECTORS
             }
         )
 
@@ -166,8 +180,8 @@ class PatientRegistrationDialog(ConversationHandler):
             update.callback_query.edit_message_text(text=text,
                                                     reply_markup=keyboard)
         else:
-            update.message.reply_text(text=text, reply_markup=keyboard)
-
+            msg = update.message.reply_text(text=text, reply_markup=keyboard)
+            context.chat_data['st_msg'] = msg.message_id
         context.user_data[START_OVER] = False
         return PATIENT_REGISTRATION_ACTION
 
@@ -265,19 +279,22 @@ class ConfigureTZDialog(ConversationHandler):
                     CallbackQueryHandler(self.conf_tz, pattern=f'^{CONF_TZ}$')
                 ],
                 TYPING_TZ: [
-                    MessageHandler(Filters.text & ~Filters.command,
+                    MessageHandler(Filters.text & ~Filters.command &
+                                   ~Filters.regex('Настройки$'),
                                    self.save_tz, run_async=False)
                 ]
             },
             fallbacks=[
                 CallbackQueryHandler(self.back, pattern=f'^{END}$'),
                 CommandHandler('stop',
-                               StartDialog.stop_nested if not
-                               kwargs.get('stop_cb') else
-                               kwargs.get('stop_cb'), run_async=False)
-
+                               StartDialog.stop_nested, run_async=False),
+                CommandHandler('start', StartDialog.restart, run_async=False),
+                *(kwargs['ex_fallbacks'] if kwargs.get('ex_fallbacks') else [])
             ],
-            map_to_parent={STOPPING: STOPPING}
+            map_to_parent={
+                STOPPING: STOPPING,
+                START_SELECTORS: START_SELECTORS
+            }
         )
 
     @staticmethod
@@ -307,8 +324,8 @@ class ConfigureTZDialog(ConversationHandler):
             update.callback_query.edit_message_text(text=text,
                                                     reply_markup=keyboard)
         else:
-            update.message.reply_text(text=text, reply_markup=keyboard)
-
+            msg = update.message.reply_text(text=text, reply_markup=keyboard)
+            context.chat_data['st_msg'] = msg.message_id
         context.user_data[START_OVER] = False
         return CONF_TZ_ACTION
 
@@ -361,6 +378,7 @@ class ConfigureNotifTimeDialog(ConversationHandler):
     ]
 
     def __init__(self, **kwargs):
+        from modules.settings_dialogs import SettingsDialog
         super().__init__(
             name=self.__class__.__name__,
             entry_points=[CallbackQueryHandler(
@@ -382,9 +400,14 @@ class ConfigureNotifTimeDialog(ConversationHandler):
                 CommandHandler('stop', StartDialog.stop_nested if not
                                kwargs.get('stop_cb') else
                                kwargs.get('stop_cb'), run_async=False),
+                CommandHandler('start', StartDialog.restart, run_async=False),
+                MessageHandler(Filters.regex('Настройки$'),
+                               SettingsDialog.restart, run_async=False)
+
             ],
             map_to_parent={
-                STOPPING: STOPPING
+                STOPPING: STOPPING,
+                START_SELECTORS: START_SELECTORS
             }
         )
 
@@ -486,9 +509,11 @@ class PatronageRegistrationDialog(ConversationHandler):
                 CommandHandler('stop', StartDialog.stop_nested,
                                run_async=False),
                 CallbackQueryHandler(PatientRegistrationDialog.back_to_start,
-                                     pattern=f'^{END}$')
+                                     pattern=f'^{END}$'),
+                CommandHandler('start', StartDialog.restart, run_async=False)
             ],
             map_to_parent={
+                START_SELECTORS: START_SELECTORS,
                 STOPPING: END,
                 END: END
             }

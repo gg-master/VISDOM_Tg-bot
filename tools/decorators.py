@@ -16,7 +16,7 @@ def registered_patient(func):
     def decorated_func(update: Update, context: CallbackContext):
         from modules.users_classes import PatientUser
         user = context.user_data.get('user')
-        if type(user) is PatientUser:
+        if type(user) is PatientUser and user.registered():
             return func(update, context)
         return just_for_registered_msg(update, context)
 
@@ -26,13 +26,13 @@ def registered_patient(func):
 def just_for_not_registered_msg(update: Update, context: CallbackContext):
     update.effective_chat.send_message(
         'Эта возможность предумотрена только для '
-        'незарегистрированных пользователей')
+        'незарегистрированных пользователей.')
 
 
 def just_for_registered_msg(update: Update, context: CallbackContext):
     update.effective_chat.send_message(
         'Эта возможность предумотрена только для '
-        'зарегистрированных пользователей')
+        'зарегистрированных пользователей.')
 
 
 def registered_patronages(func):
