@@ -49,7 +49,7 @@ class StartDialog(ConversationHandler):
             [InlineKeyboardButton(text='Зарегистрироваться',
                                   callback_data=f'{SIGN_UP_AS_PATIENT}')],
         ]
-        keyboard = InlineKeyboardMarkup(buttons)
+        kb = InlineKeyboardMarkup(buttons)
 
         text = 'Чтобы начать пользоваться Чат-Ботом ' \
                'необходимо зарегистрироваться.'
@@ -57,13 +57,16 @@ class StartDialog(ConversationHandler):
         if context.user_data.get(START_OVER):
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text,
-                                                    reply_markup=keyboard)
+                                                    reply_markup=kb)
         else:
-            update.message.reply_text(
-                START_MSG, reply_markup=ReplyKeyboardRemove())
-            msg = update.message.reply_text(text=text, reply_markup=keyboard)
-            # Сохраняем id стартового сообщения, если войдет Patronage
-            context.chat_data['st_msg'] = msg.message_id
+            try:
+                update.message.reply_text(
+                    START_MSG, reply_markup=ReplyKeyboardRemove())
+                msg = update.message.reply_text(text=text, reply_markup=kb)
+                # Сохраняем id стартового сообщения, если войдет Patronage
+                context.chat_data['st_msg'] = msg.message_id
+            except error.Unauthorized:
+                return END
         context.user_data[START_OVER] = False
         return START_SELECTORS
 
@@ -73,9 +76,13 @@ class StartDialog(ConversationHandler):
                                    context.chat_data['st_msg'])
         keyboard = ReplyKeyboardMarkup([['/start']],
                                        row_width=1, resize_keyboard=True)
-        update.message.reply_text(text='Регистрация прервана.\nЧтобы повторно '
-                                       'начать регистрацию отправьте:\n/start',
-                                  reply_markup=keyboard)
+        try:
+            update.message.reply_text(
+                text='Регистрация прервана.\nЧтобы повторно '
+                     'начать регистрацию отправьте:\n/start',
+                reply_markup=keyboard)
+        except error.Unauthorized:
+            pass
         return END
 
     @staticmethod
@@ -95,11 +102,8 @@ class StartDialog(ConversationHandler):
 
 
 class PatientRegistrationDialog(ConversationHandler):
-    post_reg_kb = ReplyKeyboardMarkup(
-        [['❔Справка', '⚙️Настройки'],
-         # ['Покинуть исследование']
-         ],
-        row_width=1, resize_keyboard=True)
+    post_reg_kb = ReplyKeyboardMarkup([['❔Справка', '⚙️Настройки']],
+                                      row_width=1, resize_keyboard=True)
 
     def __init__(self):
         super().__init__(
@@ -176,15 +180,18 @@ class PatientRegistrationDialog(ConversationHandler):
 
             # [InlineKeyboardButton(text='Назад', callback_data=f'{END}')]
         ]
-        keyboard = InlineKeyboardMarkup(buttons)
+        kb = InlineKeyboardMarkup(buttons)
 
         if not context.user_data.get(START_OVER):
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text,
-                                                    reply_markup=keyboard)
+                                                    reply_markup=kb)
         else:
-            msg = update.message.reply_text(text=text, reply_markup=keyboard)
-            context.chat_data['st_msg'] = msg.message_id
+            try:
+                msg = update.message.reply_text(text=text, reply_markup=kb)
+                context.chat_data['st_msg'] = msg.message_id
+            except error.Unauthorized:
+                return STOPPING
         context.user_data[START_OVER] = False
         return PATIENT_REGISTRATION_ACTION
 
@@ -216,13 +223,15 @@ class PatientRegistrationDialog(ConversationHandler):
         update.callback_query.answer()
         update.callback_query.delete_message()
 
-        msg = context.bot.send_message(
-            update.effective_chat.id, text=text,
-            reply_markup=PatientRegistrationDialog.post_reg_kb)
-
-        # Закрепляем сообщение, чтобы пользователь не потерялся
-        update.effective_chat.unpin_all_messages()
-        update.effective_chat.pin_message(msg.message_id)
+        try:
+            msg = context.bot.send_message(
+                update.effective_chat.id, text=text,
+                reply_markup=PatientRegistrationDialog.post_reg_kb)
+            # Закрепляем сообщение, чтобы пользователь не потерялся
+            update.effective_chat.unpin_all_messages()
+            update.effective_chat.pin_message(msg.message_id)
+        except error.Unauthorized:
+            pass
         # Запускаем регистрацию пользователя
         context.user_data['user'].register(update, context)
         return STOPPING
@@ -230,13 +239,16 @@ class PatientRegistrationDialog(ConversationHandler):
     @staticmethod
     def cant_registered(update: Update, context: CallbackContext, res):
         update.callback_query.delete_message()
-        if res is not None:
-            text = 'Вы были исключены из исследования и не можете ' \
-                   'повторно зарегистрироваться.'
+        try:
+            if res is not None:
+                text = 'Вы были исключены из исследования и не можете ' \
+                       'повторно зарегистрироваться.'
+                update.effective_chat.send_message(text)
+                return STOPPING
+            text = 'Вы не можете повторно зарегистрироваться.\n'
             update.effective_chat.send_message(text)
+        except error.Unauthorized:
             return STOPPING
-        text = 'Вы не можете повторно зарегистрироваться.\n'
-        update.effective_chat.send_message(text)
         Restore.restore_patient_msg(context, chat_id=update.effective_chat.id)
         return STOPPING
 
@@ -251,12 +263,15 @@ class PatientRegistrationDialog(ConversationHandler):
                f'В {context.user_data["user"].str_times()["EVE"]} ' \
                f'напомнит о необходимости измерить и сообщить ' \
                f'артериальное давление и частоту сердечных сокращений еще раз'
-
-        msg = context.bot.send_message(
-            update.effective_chat.id, text=text,
-            reply_markup=PatientRegistrationDialog.post_reg_kb)
-        update.effective_chat.unpin_all_messages()
-        update.effective_chat.pin_message(msg.message_id)
+        try:
+            msg = context.bot.send_message(
+                update.effective_chat.id, text=text,
+                reply_markup=PatientRegistrationDialog.post_reg_kb)
+            update.effective_chat.unpin_all_messages()
+            update.effective_chat.pin_message(msg.message_id)
+        except error.Unauthorized:
+            return STOPPING
+        context.user_data['user'].enable_user(context)
 
     @staticmethod
     def back_to_start(update: Update, context: CallbackContext):
@@ -316,15 +331,18 @@ class ConfigureTZDialog(ConversationHandler):
             ],
             [InlineKeyboardButton(text='Назад', callback_data=f'{END}')]
         ]
-        keyboard = InlineKeyboardMarkup(buttons)
+        kb = InlineKeyboardMarkup(buttons)
 
         if not context.user_data.get(START_OVER):
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text,
-                                                    reply_markup=keyboard)
+                                                    reply_markup=kb)
         else:
-            msg = update.message.reply_text(text=text, reply_markup=keyboard)
-            context.chat_data['st_msg'] = msg.message_id
+            try:
+                msg = update.message.reply_text(text=text, reply_markup=kb)
+                context.chat_data['st_msg'] = msg.message_id
+            except error.Unauthorized:
+                return STOPPING
         context.user_data[START_OVER] = False
         return CONF_TZ_ACTION
 
@@ -336,7 +354,10 @@ class ConfigureTZDialog(ConversationHandler):
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text)
         else:
-            update.message.reply_text(text=text)
+            try:
+                update.message.reply_text(text=text)
+            except error.Unauthorized:
+                return STOPPING
         context.user_data[START_OVER] = False
         return TYPING_TZ
 
@@ -523,7 +544,10 @@ class PatronageRegistrationDialog(ConversationHandler):
     def pre_start(update: Update, context: CallbackContext):
         if get_patronage_by_chat_id(update.effective_chat.id):
             text = 'Вы не можете повторно зарегистрироваться.\n'
-            update.effective_chat.send_message(text)
+            try:
+                update.effective_chat.send_message(text)
+            except error.Unauthorized:
+                return STOPPING
             Restore.restore_patronage_msg(
                 context, chat_id=update.effective_chat.id)
             return END
@@ -535,26 +559,32 @@ class PatronageRegistrationDialog(ConversationHandler):
 
         context.bot.delete_message(update.message.chat_id,
                                    context.chat_data['st_msg'])
-        msg = update.message.reply_text(text=text)
-        context.chat_data['st_msg'] = msg.message_id
-
+        try:
+            msg = update.message.reply_text(text=text)
+            context.chat_data['st_msg'] = msg.message_id
+        except error.Unauthorized:
+            return STOPPING
         return TYPING_TOKEN
 
     @staticmethod
     def get_token(update: Update, context: CallbackContext):
         token = update.message.text
         other_patronages = get_all_patronages()
-        if other_patronages:
-            update.effective_chat.send_message(
-                'Вы не можете зарегистрироваться как сотрудник.')
-            return END
-        if token == get_from_env('PATRONAGE_TOKEN'):
-            context.user_data['user'] = PatronageUser(update.effective_chat.id)
-            context.user_data['user'].register(update, context)
+        try:
+            if other_patronages:
+                update.effective_chat.send_message(
+                    'Вы не можете зарегистрироваться как сотрудник.')
+                return END
+            if token == get_from_env('PATRONAGE_TOKEN'):
+                context.user_data['user'] = PatronageUser(
+                    update.effective_chat.id)
+                context.user_data['user'].register(update, context)
 
-            update.effective_chat.send_message('Вы успешно зарегестрированы!')
-            PatronageJob.default_job(update, context)
-            return END
-
-        update.message.reply_text('Неверный токен.\nПопробуйте снова.')
+                update.effective_chat.send_message(
+                    'Вы успешно зарегестрированы!')
+                PatronageJob.default_job(update, context)
+                return END
+            update.message.reply_text('Неверный токен.\nПопробуйте снова.')
+        except error.Unauthorized:
+            return STOPPING
         return TYPING_TOKEN

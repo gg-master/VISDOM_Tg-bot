@@ -1,6 +1,6 @@
 import logging
 
-from telegram import Update
+from telegram import Update, error
 from telegram.ext import (CallbackQueryHandler, CommandHandler, Defaults,
                           Filters, MessageHandler, Updater, CallbackContext)
 
@@ -17,25 +17,32 @@ logging.basicConfig(level=logging.INFO,
 
 
 def unknown(update: Update, context: CallbackContext):
-    context.bot.send_message(chat_id=update.effective_chat.id,
-                             text="Извините, я не понял эту команду.")
+    try:
+        context.bot.send_message(chat_id=update.effective_chat.id,
+                                 text="Извините, я не понял эту команду.")
+    except error.Unauthorized:
+        pass
 
 
 def help_msg(update: Update, context: CallbackContext):
     from modules.users_classes import BasicUser, PatientUser, PatronageUser
-    if not context.user_data.get('user'):
-        update.message.reply_text(
-            "Справка.\nЕсли Вы ранее не регистрировались, то чтобы начать "
-            "работу с ботом, введите: /start\n\n"
-            "Если Вы уже регистрировались, то восстановите доступ c помощью "
-            "соответствующего сообщения.")
-    elif type(context.user_data.get('user')) is BasicUser:
-        update.message.reply_text(
-            "Справка.\nЧтобы получить больше возможностей зарегистрируйтесь.")
-    elif type(context.user_data.get('user')) is PatientUser:
-        update.message.reply_text("Справка. Команды Для пациента.")
-    elif type(context.user_data.get('user')) is PatronageUser:
-        update.message.reply_text("Справка. Команды для патронажа.")
+    try:
+        if not context.user_data.get('user'):
+            update.message.reply_text(
+                "Справка.\nЕсли Вы ранее не регистрировались, то чтобы начать "
+                "работу с ботом, введите: /start\n\nЕсли Вы уже "
+                "регистрировались, то восстановите доступ c помощью "
+                "соответствующего сообщения.")
+        elif type(context.user_data.get('user')) is BasicUser:
+            update.message.reply_text(
+                "Справка.\nЧтобы получить больше возможностей "
+                "зарегистрируйтесь.")
+        elif type(context.user_data.get('user')) is PatientUser:
+            update.message.reply_text("Справка. Команды Для пациента.")
+        elif type(context.user_data.get('user')) is PatronageUser:
+            update.message.reply_text("Справка. Команды для патронажа.")
+    except error.Unauthorized:
+        pass
 
 
 def main():

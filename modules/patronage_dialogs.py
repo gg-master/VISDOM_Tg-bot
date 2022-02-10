@@ -1,7 +1,7 @@
 import logging
 from os import remove
 
-from telegram import ReplyKeyboardMarkup, Update
+from telegram import ReplyKeyboardMarkup, Update, error
 from telegram.ext import (CallbackContext, CallbackQueryHandler,
                           CommandHandler, ConversationHandler, Filters,
                           MessageHandler)
@@ -52,28 +52,36 @@ class PatronageJob(ConversationHandler):
                ' одну из нужных кнопок. \nЧтобы прервать выполнение ' \
                'команд отправьте /stop.'
 
-        keyboard = ReplyKeyboardMarkup(
+        kb = ReplyKeyboardMarkup(
             [['Получить данные по пациенту',
               'Получить данные по всем пользователям'],
              ['Получить список пациентов',
               'Исключить пациента из исследования']],
             row_width=1, resize_keyboard=True)
-
-        update.effective_chat.send_message(text=text, reply_markup=keyboard)
+        try:
+            update.effective_chat.send_message(text=text, reply_markup=kb)
+        except error.Unauthorized:
+            pass
 
     @staticmethod
     @registered_patronages
     def send_user_file(update: Update, context: CallbackContext):
         text = 'Введите код пациента'
-        update.effective_chat.send_message(text)
-        return SEND_USER_DATA_PAT
+        try:
+            update.effective_chat.send_message(text)
+            return SEND_USER_DATA_PAT
+        except error.Unauthorized:
+            return END
 
     @staticmethod
     @registered_patronages
     def exclude_patient_state(update: Update, context: CallbackContext):
         text = 'Введите код пациента'
-        update.effective_chat.send_message(text)
-        return EXCLUDE_PATIENT
+        try:
+            update.effective_chat.send_message(text)
+            return EXCLUDE_PATIENT
+        except error.Unauthorized:
+            return END
 
     @staticmethod
     @registered_patronages
@@ -91,6 +99,8 @@ class PatronageJob(ConversationHandler):
                 logging.info(ex)
                 update.message.reply_text(
                     'Файл не найден. Обратитесь к администратору.')
+            except error.Unauthorized:
+                return END
             except Exception as ex:
                 logging.info(ex)
         else:
@@ -103,18 +113,23 @@ class PatronageJob(ConversationHandler):
     def exclude_patient(update: Update, context: CallbackContext):
         user_code = update.message.text
         patient = get_patient_by_user_code(user_code)
-        if patient:
-            change_patients_membership(user_code, False)
+        try:
+            if patient:
+                change_patients_membership(user_code, False)
 
-            patient_list[patient.chat_id].change_membership(context)
+                patient_list[patient.chat_id].change_membership(context)
+                logging.info(f'Patient {user_code}-{patient.chat_id} EXCLUDE')
 
-            context.bot.send_message(patient.chat_id,
-                                     'Вы были исключны из исследования.\n'
+                context.bot.send_message(
+                    patient.chat_id, 'Вы были исключны из исследования.\n'
                                      'Если это ошибка, обратитесь к врачу.')
-            update.message.reply_text(f'Пациент {user_code} был исключен из '
-                                      f'исследования.')
-        else:
-            update.message.reply_text('Пациента с таким кодом не существует.')
+                update.message.reply_text(f'Пациент {user_code} был исключен '
+                                          f'из исследования.')
+            else:
+                update.message.reply_text(
+                    'Пациента с таким кодом не существует.')
+        except error.Unauthorized:
+            pass
         return END
 
     @staticmethod
@@ -122,12 +137,14 @@ class PatronageJob(ConversationHandler):
     def alarm_send_p_data(update: Update, context: CallbackContext):
         data = update.callback_query.data
         user_code = data[data.find('&') + 1:]
-
-        make_file_by_patient_user_code(user_code)
-        update.effective_chat.send_document(
-            open(f'static/{user_code}_data.xlsx', 'rb'))
-        context.bot.edit_message_reply_markup(
-            update.effective_chat.id, update.effective_message.message_id)
+        try:
+            make_file_by_patient_user_code(user_code)
+            update.effective_chat.send_document(
+                open(f'static/{user_code}_data.xlsx', 'rb'))
+            context.bot.edit_message_reply_markup(
+                update.effective_chat.id, update.effective_message.message_id)
+        except error.Unauthorized:
+            pass
 
     @staticmethod
     @registered_patronages
@@ -142,6 +159,8 @@ class PatronageJob(ConversationHandler):
             update.effective_chat.send_message(
                 'Файл не найден. Обратитесь к администратору.'
             )
+        except error.Unauthorized:
+            pass
         except Exception as ex:
             logging.info(ex)
         return END
@@ -159,12 +178,17 @@ class PatronageJob(ConversationHandler):
             update.effective_chat.send_message(
                 'Файл не найден. Обратитесь к администратору.'
             )
+        except error.Unauthorized:
+            pass
         except Exception as ex:
             logging.info(ex)
         return END
 
     @staticmethod
     def stop(update: Update, context: CallbackContext):
-        text = 'Выполнение команды прервано.'
-        update.effective_chat.send_message(text)
+        try:
+            text = 'Выполнение команды прервано.'
+            update.effective_chat.send_message(text)
+        except error.Unauthorized:
+            pass
         return END

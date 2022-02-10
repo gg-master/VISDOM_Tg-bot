@@ -5,14 +5,14 @@ from threading import Thread
 from typing import Dict, Tuple
 
 import pytz
-from telegram import Update
+from telegram import Update, error
 from telegram.ext import CallbackContext
 
 from data import db_session
 from db_api import (add_patient, add_patronage, add_record, change_accept_time,
                     change_patients_time_zone, get_all_patronages,
                     get_last_record_by_accept_time, get_patient_by_chat_id,
-                    get_patronage_by_chat_id)
+                    get_patronage_by_chat_id, get_all_records_by_accept_time)
 from modules.location import Location
 from modules.notification_dailogs import DataCollectionDialog, PillTakingDialog
 from modules.patient_list import patient_list
@@ -158,6 +158,7 @@ class PatientUser(BasicUser):
         interval = dt.timedelta(hours=1) if state_name == 'MOR' \
             else dt.timedelta(minutes=30)
 
+        remove_job_if_exists(f'{self.chat_id}-rep_task', context)
         context.job_queue.run_repeating(
             callback=repeating_task,
             interval=interval,
@@ -268,6 +269,17 @@ class PatientUser(BasicUser):
         self.orig_t, self.orig_loc = self.times, self.location
 
         self._set_curr_state_by_time()
+
+    def enable_user(self, context: CallbackContext):
+        Thread(target=self._threading_enable, args=(context,)).start()
+
+    def _threading_enable(self, context: CallbackContext):
+        if not context.job_queue.get_jobs_by_name(f'{self.chat_id}-MOR'):
+            self.recreate_notification(context)
+        if not context.job_queue.get_jobs_by_name(f'{self.chat_id}-rep_task'):
+            if self.state() and get_all_records_by_accept_time(
+                    self.accept_times[self.state()[0]]):
+                self.restore_repeating_task(context)
 
     def register(self, update: Update, context: CallbackContext):
         super().register()
@@ -390,5 +402,8 @@ class PatronageUser(BasicUser):
                     'Получить данные о пациенте',
                     callback_data=f'A_PATIENT_DATA&{user.code}')]],
                 one_time_keyboard=True)
-
-            context.bot.send_message(patronage.chat_id, text, reply_markup=kb)
+            try:
+                context.bot.send_message(patronage.chat_id, text,
+                                         reply_markup=kb)
+            except error.Unauthorized:
+                pass
