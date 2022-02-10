@@ -1,5 +1,4 @@
-from telegram import (InlineKeyboardButton, InlineKeyboardMarkup,
-                      ReplyKeyboardMarkup, Update)
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, error
 from telegram.ext import (CallbackContext, CallbackQueryHandler,
                           CommandHandler, ConversationHandler, Filters,
                           MessageHandler)
@@ -73,15 +72,18 @@ class SettingsDialog(ConversationHandler):
                                   callback_data=f'{CONFIRM}'),
              ]
         ]
-        keyboard = InlineKeyboardMarkup(buttons)
+        kb = InlineKeyboardMarkup(buttons)
 
         if context.user_data.get(START_OVER):
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text,
-                                                    reply_markup=keyboard)
+                                                    reply_markup=kb)
         else:
-            msg = update.message.reply_text(text=text, reply_markup=keyboard)
-            context.chat_data['st_msg'] = msg.message_id
+            try:
+                msg = update.message.reply_text(text=text, reply_markup=kb)
+                context.chat_data['st_msg'] = msg.message_id
+            except error.Unauthorized:
+                return END
         context.user_data[START_OVER] = False
         return SETTINGS_ACTION
 
@@ -108,6 +110,8 @@ class SettingsDialog(ConversationHandler):
                    'Попробуйте снова через некоторое время.'
             update.effective_chat.send_message(
                 text=text, reply_markup=PatientRegistrationDialog.post_reg_kb)
+        except error.Unauthorized:
+            pass
         finally:
             return END
 
@@ -123,9 +127,11 @@ class SettingsDialog(ConversationHandler):
         elif context.chat_data.get('st_msg'):
             context.bot.delete_message(update.effective_chat.id,
                                        context.chat_data['st_msg'])
-
-        update.effective_chat.send_message(
-            text=text, reply_markup=PatientRegistrationDialog.post_reg_kb)
+        try:
+            update.effective_chat.send_message(
+                text=text, reply_markup=PatientRegistrationDialog.post_reg_kb)
+        except error.Unauthorized:
+            pass
         return END
 
     @staticmethod
@@ -195,38 +201,3 @@ class SettingsConfTZDialog(ConfigureTZDialog):
         context.user_data[START_OVER] = True
         SettingsDialog.start(update, context)
         return END
-
-
-# class LeaveStudy(ConversationHandler):
-#     def __init__(self):
-#         super().__init__(
-#             name=self.__class__.__name__,
-#             entry_points=[MessageHandler(
-#                 Filters.regex('^Покинуть исследование$'), self.start)],
-#             states={
-#                 SETTINGS_ACTION: [
-#                     CallbackQueryHandler(self.confirm,
-#                                          pattern='LEAVE_STUDY_CONFIRMED')
-#                 ]
-#             },
-#             fallbacks=[
-#                 CommandHandler('stop', self.stop),
-#             ]
-#         )
-#
-#     @staticmethod
-#     @registered_patient
-#     def start(update: Update, context: CallbackContext):
-#         text = 'Вы действительно хотите покинуть исследование?'
-#
-#         kb = InlineKeyboardMarkup([[InlineKeyboardButton(
-#             'Подтвердить', callback_data='LEAVE_STUDY_CONFIRMED')]])
-#
-#         update.effective_chat.send_message(text, reply_markup=kb)
-#
-#     @staticmethod
-#     def confirm(update: Update, context: CallbackContext):
-#         text = 'Вы исключены из исследования!'
-#
-#         update.callback_query.edit_message_text(text)
-#         update.callback_query.edit_message_reply_markup()

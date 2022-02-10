@@ -1,6 +1,6 @@
 import requests
 from telegram import (KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove,
-                      Update)
+                      Update, error)
 from telegram.ext import (CallbackContext, CallbackQueryHandler,
                           CommandHandler, ConversationHandler, Filters,
                           MessageHandler)
@@ -101,40 +101,46 @@ class FindLocationDialog(ConversationHandler):
             update.callback_query.delete_message()
             if context.chat_data.get('st_msg'):
                 context.chat_data['st_msg'] = None
-
-        msg = context.bot.send_message(
-            update.effective_chat.id,
-            text='Выберите способ добавления местоположения',
-            reply_markup=kboard)
-        context.chat_data['st_msg'] = msg.message_id
-        context.user_data[START_OVER] = False
-        return 1
+        try:
+            msg = context.bot.send_message(
+                update.effective_chat.id,
+                text='Выберите способ добавления местоположения',
+                reply_markup=kboard)
+            context.chat_data['st_msg'] = msg.message_id
+            context.user_data[START_OVER] = False
+            return 1
+        except error.Unauthorized:
+            return STOPPING
 
     @staticmethod
     def input_address(update: Update, context: CallbackContext):
-        context.bot.send_message(update.effective_chat.id,
-                                 text='Введите Ваш адрес или '
-                                      'ближайший населенный пункт.',
-                                 reply_markup=ReplyKeyboardRemove())
-        return 2
+        try:
+            context.bot.send_message(update.effective_chat.id,
+                                     text='Введите Ваш адрес или '
+                                          'ближайший населенный пункт.',
+                                     reply_markup=ReplyKeyboardRemove())
+            return 2
+        except error.Unauthorized:
+            return STOPPING
 
     @staticmethod
     def find_response(update: Update, context: CallbackContext):
         static_api_request = FindLocationDialog.find_location(update, context)
-
-        if static_api_request is not None:
-            keyboard = ReplyKeyboardMarkup(
-                [['Да, верно'], ['Нет, неверно']],
-                row_width=1, resize_keyboard=True, one_time_keyboard=True)
-            context.bot.send_photo(
-                update.message.chat_id,
-                static_api_request,
-                caption='Пожалуйста, убидетесь, что мы правильно '
-                        'определили Ваше местоположение.',
-                reply_markup=keyboard)
-            return 3
-
-        return FindLocationDialog.input_address(update, context)
+        try:
+            if static_api_request is not None:
+                keyboard = ReplyKeyboardMarkup(
+                    [['Да, верно'], ['Нет, неверно']],
+                    row_width=1, resize_keyboard=True, one_time_keyboard=True)
+                context.bot.send_photo(
+                    update.message.chat_id,
+                    static_api_request,
+                    caption='Пожалуйста, убидетесь, что мы правильно '
+                            'определили Ваше местоположение.',
+                    reply_markup=keyboard)
+                return 3
+            return FindLocationDialog.input_address(update, context)
+        except error.Unauthorized:
+            return STOPPING
 
     @staticmethod
     def location_response(update: Update, context: CallbackContext, ret=None):

@@ -1,4 +1,4 @@
-from telegram import Update
+from telegram import Update, error
 from telegram.ext import CallbackContext
 
 
@@ -24,15 +24,21 @@ def registered_patient(func):
 
 
 def just_for_not_registered_msg(update: Update):
-    update.effective_chat.send_message(
-        'Эта возможность предумотрена только для '
-        'незарегистрированных пользователей.')
+    try:
+        update.effective_chat.send_message(
+            'Эта возможность предумотрена только для '
+            'незарегистрированных пользователей.')
+    except error.Unauthorized:
+        pass
 
 
 def just_for_registered_msg(update: Update):
-    update.effective_chat.send_message(
-        'Эта возможность предумотрена только для '
-        'зарегистрированных пользователей.')
+    try:
+        update.effective_chat.send_message(
+            'Эта возможность предумотрена только для '
+            'зарегистрированных пользователей.')
+    except error.Unauthorized:
+        pass
 
 
 def registered_patronages(func):
@@ -46,5 +52,8 @@ def registered_patronages(func):
 
 
 def just_for_patronage(update: Update):
-    update.effective_chat.send_message(
-        'Это возможность предусмотрена только для специальных сотрудников')
+    try:
+        update.effective_chat.send_message(
+            'Это возможность предусмотрена только для специальных сотрудников')
+    except error.Unauthorized:
+        pass

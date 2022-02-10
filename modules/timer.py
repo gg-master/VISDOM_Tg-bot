@@ -13,6 +13,7 @@ def remove_job_if_exists(name, context: CallbackContext):
     if not current_jobs:
         return False
     for job in current_jobs:
+        logging.info(f'REMOVED TASK: {name}')
         job.schedule_removal()
     return True
 
@@ -33,9 +34,12 @@ def create_daily_notification(context: CallbackContext, **kwargs):
             if kwargs['next_run_time'] else {},
         )
     except (IndexError, ValueError):
-        context.bot.send_message(chat_id, 'Произошла ошибка про попытке '
-                                          'включить таймер. Обратитесь к '
-                                          'администратору')
+        try:
+            context.bot.send_message(chat_id, 'Произошла ошибка про попытке '
+                                              'включить таймер. Обратитесь к '
+                                              'администратору')
+        except error.Unauthorized:
+            pass
 
 
 def daily_task(context: CallbackContext):
@@ -61,6 +65,7 @@ def daily_task(context: CallbackContext):
         except Exception as e:
             logging.info(f'Cant find message id to delete in daily task. '
                          f'More:{e}')
+
     remove_job_if_exists(f'{user.chat_id}-rep_task', context)
 
     # Если с момента последней записи прошло более 24 часов, то устанавливаем
@@ -104,9 +109,8 @@ def deleting_pre_start_msg_task(context: CallbackContext):
     """Удаление сообщения после временного лимита"""
     job = context.job
     data: Optional[Dict] = job.context
+    user = data['user']
     try:
-        user = data['user']
-
         context.bot.delete_message(user.chat_id, user.msg_to_del.message_id)
         user.msg_to_del = None
 
@@ -115,4 +119,4 @@ def deleting_pre_start_msg_task(context: CallbackContext):
 
         user.check_user_records(context)
     except error.TelegramError:
-        remove_job_if_exists(f'{data["chat_id"]}-pre_start_msg', context)
+        remove_job_if_exists(f'{user.chat_id}-pre_start_msg', context)

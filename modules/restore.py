@@ -40,7 +40,8 @@ class Restore:
         p.recreate_notification(self.context)
 
         # Если в базе уже есть какие-либо рекорды, то пациент не новенький
-        if get_all_records_by_accept_time(p.accept_times[p.state()[0]]):
+        if p.state()[0] == 'EVE' or \
+                get_all_records_by_accept_time(p.accept_times[p.state()[0]]):
             # Восстановление цикличных тасков. Если для них соответствует время
             p.restore_repeating_task(self.context)
 
@@ -70,10 +71,10 @@ class Restore:
             context.bot.send_message(kwargs['chat_id'], text=text,
                                      reply_markup=kb)
         except error.Unauthorized:
-            for task in (f'{kwargs["chat_id"]}-MOR', f'{kwargs["chat_id"]}-EVE',
+            for task in (f'{kwargs["chat_id"]}-MOR',
+                         f'{kwargs["chat_id"]}-EVE',
                          f'{kwargs["chat_id"]}-rep_task'):
                 remove_job_if_exists(task, context)
-
 
     @staticmethod
     def restore_patronage_msg(context, **kwargs):
@@ -89,6 +90,8 @@ class Restore:
         try:
             context.bot.send_message(
                 kwargs['chat_id'], text=text, reply_markup=keyboard)
+        except error.Unauthorized:
+            pass
         except Exception as e:
             logging.warning(f'CANT SEND RESTORE_MSG TO PATRONAGE. '
                             f'CHAT NOT FOUND. \nMORE: {e}')
@@ -114,18 +117,20 @@ def patient_restore_handler(update: Update, context: CallbackContext):
 
     # Удаляем сообщени с кнопкой восстановления
     update.callback_query.delete_message()
-    update.effective_chat.send_message(
-        'Доступ восстановлен. Теперь Вы можете добавить ответ на уведомления, '
-        'к которым не было доступа.')
-    PatientRegistrationDialog.restore_main_msg(update, context)
+    try:
+        update.effective_chat.send_message(
+            'Доступ восстановлен. Теперь Вы можете добавить ответ на '
+            'уведомления, к которым не было доступа.')
+        PatientRegistrationDialog.restore_main_msg(update, context)
 
-    # Если уже пришло уведомление, то переотправляем его после восстановления
-    if user.msg_to_del:
-        # Снова отображаем удаленное уведомление
-        user.notification_states[user.state()[0]][
-            user.state()[1]].pre_start(
-            context, context.job_queue.get_jobs_by_name(
-                f'{user.chat_id}-rep_task')[0].context)
+        # Если уже пришло уведомление, то переотправляем его
+        if user.msg_to_del:
+            # Снова отображаем удаленное уведомление
+            user.notification_states[user.state()[0]][
+                user.state()[1]].pre_start(
+                context, data={'user': user})
+    except error.Unauthorized:
+        pass
 
 
 @not_registered_users
@@ -140,6 +145,8 @@ def patronage_restore_handler(update: Update, context: CallbackContext):
         update.callback_query.delete_message()
         update.effective_chat.send_message('Доступ восстановлен.')
         PatronageJob.default_job(update, context)
+    except error.Unauthorized:
+        pass
     except Exception as e:
         logging.warning(f'CANT SEND RESTORE_MSG TO PATIENT. CHAT NOT FOUND.'
                         f'\nMORE: {e}')

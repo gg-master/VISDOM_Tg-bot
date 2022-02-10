@@ -22,6 +22,7 @@ class Notification:
                 msg = update.callback_query.edit_message_text(
                     text=text, reply_markup=keyboard)
             except error.TelegramError:
+                context.user_data[START_OVER] = False
                 return END
         else:
             # Если сообщения отличаются
@@ -34,10 +35,12 @@ class Notification:
             if not user.active_dialog_msg:
                 context.bot.delete_message(user.chat_id,
                                            user.msg_to_del.message_id)
-
-            # Отправляем новое сообщение
-            msg = context.bot.send_message(
-                user.chat_id, text=text, reply_markup=keyboard)
+            try:
+                # Отправляем новое сообщение
+                msg = context.bot.send_message(
+                    user.chat_id, text=text, reply_markup=keyboard)
+            except error.Unauthorized:
+                return END
 
         user.msg_to_del = user.active_dialog_msg = msg
 
@@ -84,11 +87,13 @@ class PillTakingDialog(ConversationHandler):
 
         keyboard = InlineKeyboardMarkup(buttons)
 
-        msg = context.bot.send_message(user.chat_id, text=text,
-                                       reply_markup=keyboard)
-        user.msg_to_del = msg
-
-        # Само-удаление сообщения с возможностью добавить ответ на уведомление
+        try:
+            msg = context.bot.send_message(user.chat_id, text=text,
+                                           reply_markup=keyboard)
+            user.msg_to_del = msg
+        except error.Unauthorized:
+            pass
+        # Таск на "само-удаление" сообщения
         remove_job_if_exists(f'{user.chat_id}-pre_start_msg', context)
         context.job_queue.run_once(
             callback=deleting_pre_start_msg_task,
@@ -141,8 +146,12 @@ class PillTakingDialog(ConversationHandler):
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text)
         else:
-            update.effective_chat.send_message(text=text)
-            context.user_data[START_OVER] = False
+            try:
+                update.effective_chat.send_message(text=text)
+            except error.Unauthorized:
+                return END
+            finally:
+                context.user_data[START_OVER] = False
         return TYPING
 
     @staticmethod
@@ -157,7 +166,10 @@ class PillTakingDialog(ConversationHandler):
             return PillTakingDialog.start(update, context)
         text = 'Ваш ответ слишком длинный.' \
                '\nВозможное количество символов: 100'
-        update.message.reply_text(text=text)
+        try:
+            update.message.reply_text(text=text)
+        except error.Unauthorized:
+            return END
         return PillTakingDialog.reason(update, context)
 
     @staticmethod
@@ -287,7 +299,10 @@ class DataCollectionDialog(ConversationHandler):
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text)
         else:
-            update.effective_chat.send_message(text=text)
+            try:
+                update.effective_chat.send_message(text=text)
+            except error.Unauthorized:
+                return END
         context.user_data[START_OVER] = False
         return TYPING
 
