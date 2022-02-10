@@ -1,18 +1,15 @@
-from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, \
-    InlineKeyboardButton, ReplyKeyboardRemove
-from telegram.ext import (
-    CallbackContext, CommandHandler, MessageHandler,
-    Filters, CallbackQueryHandler,
-)
+from telegram import (InlineKeyboardButton, InlineKeyboardMarkup,
+                      ReplyKeyboardMarkup, ReplyKeyboardRemove, Update, error)
+from telegram.ext import (CallbackContext, CallbackQueryHandler,
+                          CommandHandler, Filters, MessageHandler)
 
 from db_api import get_all_patronages, get_patronage_by_chat_id
-from modules.patronage_dialogs import PatronageJob
-from modules.users_classes import BasicUser, PatientUser, PatronageUser
 from modules.dialogs_shortcuts.start_shortcuts import *
+from modules.patronage_dialogs import PatronageJob
 from modules.restore import Restore
-
-from tools.prepared_answers import START_MSG
+from modules.users_classes import BasicUser, PatientUser, PatronageUser
 from tools.decorators import not_registered_users
+from tools.prepared_answers import START_MSG
 from tools.tools import get_from_env
 
 
@@ -91,13 +88,19 @@ class StartDialog(ConversationHandler):
         try:
             context.bot.delete_message(update.effective_chat.id,
                                        context.chat_data['st_msg'])
-        except Exception as e:
+        except error.TelegramError:
             pass
         finally:
             return StartDialog.start(update, context)
 
 
 class PatientRegistrationDialog(ConversationHandler):
+    post_reg_kb = ReplyKeyboardMarkup(
+        [['❔Справка', '⚙️Настройки'],
+         # ['Покинуть исследование']
+         ],
+        row_width=1, resize_keyboard=True)
+
     def __init__(self):
         super().__init__(
             name=self.__class__.__name__,
@@ -161,7 +164,7 @@ class PatientRegistrationDialog(ConversationHandler):
                    'персональный код и часовой пояс.'
 
         buttons = [
-            [InlineKeyboardButton(text="Продолжить",
+            [InlineKeyboardButton(text='Продолжить',
                                   callback_data=f'{CONF_NOTIFICATIONS}')]
             if location and code else '',
 
@@ -200,24 +203,22 @@ class PatientRegistrationDialog(ConversationHandler):
 
     @staticmethod
     def end_reg(update: Update, context: CallbackContext):
-        text = f"Поздравляем, вы зарегистрированы в системе!\n\n" \
-               f"Теперь каждый день в " \
-               f"{context.user_data['user'].str_times()['MOR']} " \
-               f"чат-бот напомнит Вам принять " \
-               f"лекарство, а также измерить и сообщить артериальное " \
-               f"давление и частоту сердечных сокращений. \n\n" \
-               f"В {context.user_data['user'].str_times()['EVE']} " \
-               f"напомнит о необходимости измерить и сообщить " \
-               f"артериальное давление и частоту сердечных сокращений еще раз"
+        text = f'Поздравляем, вы зарегистрированы в системе!\n\n' \
+               f'Теперь каждый день в ' \
+               f'{context.user_data["user"].str_times()["MOR"]} ' \
+               f'чат-бот напомнит Вам принять ' \
+               f'лекарство, а также измерить и сообщить артериальное ' \
+               f'давление и частоту сердечных сокращений. \n\n' \
+               f'В {context.user_data["user"].str_times()["EVE"]} ' \
+               f'напомнит о необходимости измерить и сообщить ' \
+               f'артериальное давление и частоту сердечных сокращений еще раз'
 
         update.callback_query.answer()
         update.callback_query.delete_message()
 
-        keyboard = ReplyKeyboardMarkup([['❔Справка', '⚙️Настройки']],
-                                       row_width=1, resize_keyboard=True)
-
         msg = context.bot.send_message(
-            update.effective_chat.id, text=text, reply_markup=keyboard)
+            update.effective_chat.id, text=text,
+            reply_markup=PatientRegistrationDialog.post_reg_kb)
 
         # Закрепляем сообщение, чтобы пользователь не потерялся
         update.effective_chat.unpin_all_messages()
@@ -228,12 +229,12 @@ class PatientRegistrationDialog(ConversationHandler):
 
     @staticmethod
     def cant_registered(update: Update, context: CallbackContext, res):
+        update.callback_query.delete_message()
         if res is not None:
             text = 'Вы были исключены из исследования и не можете ' \
                    'повторно зарегистрироваться.'
             update.effective_chat.send_message(text)
             return STOPPING
-        update.callback_query.delete_message()
         text = 'Вы не можете повторно зарегистрироваться.\n'
         update.effective_chat.send_message(text)
         Restore.restore_patient_msg(context, chat_id=update.effective_chat.id)
@@ -241,21 +242,19 @@ class PatientRegistrationDialog(ConversationHandler):
 
     @staticmethod
     def restore_main_msg(update: Update, context: CallbackContext):
-        text = f"Поздравляем, вы зарегистрированы в системе!\n\n" \
-               f"Теперь каждый день в " \
-               f"{context.user_data['user'].str_times()['MOR']} " \
-               f"чат-бот напомнит Вам принять " \
-               f"лекарство, а также измерить и сообщить артериальное " \
-               f"давление и частоту сердечных сокращений. \n\n" \
-               f"В {context.user_data['user'].str_times()['EVE']} " \
-               f"напомнит о необходимости измерить и сообщить " \
-               f"артериальное давление и частоту сердечных сокращений еще раз"
-
-        keyboard = ReplyKeyboardMarkup([['❔Справка', '⚙️Настройки']],
-                                       row_width=1, resize_keyboard=True)
+        text = f'Поздравляем, вы зарегистрированы в системе!\n\n' \
+               f'Теперь каждый день в ' \
+               f'{context.user_data["user"].str_times()["MOR"]} ' \
+               f'чат-бот напомнит Вам принять ' \
+               f'лекарство, а также измерить и сообщить артериальное ' \
+               f'давление и частоту сердечных сокращений. \n\n' \
+               f'В {context.user_data["user"].str_times()["EVE"]} ' \
+               f'напомнит о необходимости измерить и сообщить ' \
+               f'артериальное давление и частоту сердечных сокращений еще раз'
 
         msg = context.bot.send_message(
-            update.effective_chat.id, text=text, reply_markup=keyboard)
+            update.effective_chat.id, text=text,
+            reply_markup=PatientRegistrationDialog.post_reg_kb)
         update.effective_chat.unpin_all_messages()
         update.effective_chat.pin_message(msg.message_id)
 
@@ -369,7 +368,7 @@ class ConfigureTZDialog(ConversationHandler):
 class ConfigureNotifTimeDialog(ConversationHandler):
     buttons = [
         [
-            InlineKeyboardButton(text="-15 мин", callback_data='-15'),
+            InlineKeyboardButton(text='-15 мин', callback_data='-15'),
             InlineKeyboardButton(text='-30 мин', callback_data='-30'),
             InlineKeyboardButton(text='+30 мин', callback_data='+30'),
             InlineKeyboardButton(text='+15 мин', callback_data='+15'),
@@ -424,7 +423,7 @@ class ConfigureNotifTimeDialog(ConversationHandler):
             if not t else t
 
         buttons = [
-            [InlineKeyboardButton(text="Завершить регистрацию",
+            [InlineKeyboardButton(text='Завершить регистрацию',
                                   callback_data=f'{FINISH_REGISTRATION}')]
             if not t else '',
 
@@ -463,18 +462,18 @@ class ConfigureNotifTimeDialog(ConversationHandler):
     @staticmethod
     def time_change(update: Update, context: CallbackContext):
         tm = context.user_data['tm']
-        res = context.user_data["user"].add_minutes(
+        res = context.user_data['user'].add_minutes(
             tm, update.callback_query.data)
 
-        text = f'Изменение времени получения ' \
-               f'{"вечерних" if context.user_data["tm"] == "EVE" else "утренних"}' \
-               f' уведомлений.\n'
+        text = f'''Изменение времени получения {"вечерних" 
+        if "EVE" == "EVE" else "утренних"} уведомлений.\n'''
 
         if not res and context.user_data.get('lim'):
             return TIME_CHANGE
 
         if not res:
-            text += f'Крайне время: {context.user_data["user"].str_times()[tm]}'
+            text += f'Крайне время: ' \
+                    f'{context.user_data["user"].str_times()[tm]}'
             context.user_data['lim'] = True
         else:
             text += f'Время: {context.user_data["user"].str_times()[tm]}'
@@ -530,7 +529,6 @@ class PatronageRegistrationDialog(ConversationHandler):
             return END
         return PatronageRegistrationDialog.start(update, context)
 
-
     @staticmethod
     def start(update: Update, context: CallbackContext):
         text = f'Введите токен для регистрации сотрудника.'
@@ -553,8 +551,7 @@ class PatronageRegistrationDialog(ConversationHandler):
         if token == get_from_env('PATRONAGE_TOKEN'):
             context.user_data['user'] = PatronageUser(update.effective_chat.id)
             context.user_data['user'].register(update, context)
-            # keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(
-            #     text='Начать работу', callback_data=DEFAULT_JOB)]])
+
             update.effective_chat.send_message('Вы успешно зарегестрированы!')
             PatronageJob.default_job(update, context)
             return END

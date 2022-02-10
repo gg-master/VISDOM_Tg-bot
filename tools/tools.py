@@ -1,7 +1,7 @@
-import os
+import argparse
 import base64
 import logging
-import argparse
+import os
 
 from dotenv import load_dotenv
 
@@ -22,9 +22,10 @@ def get_from_env(item):
 
 
 def convert_tz(coords=None, tz_offset=None) -> str:
+    from datetime import datetime, timedelta
+
     import pytz
     import timezonefinder
-    from datetime import datetime, timedelta
 
     now = datetime.now(pytz.utc)
     if coords and not tz_offset:

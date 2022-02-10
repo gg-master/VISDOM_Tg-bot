@@ -1,5 +1,6 @@
 import sqlalchemy
 from sqlalchemy import orm
+
 from .db_session import SqlAlchemyBase
 
 
@@ -15,10 +16,7 @@ class Record(SqlAlchemyBase):
     time_zone = sqlalchemy.Column(sqlalchemy.String(45))
     response_time = sqlalchemy.Column(sqlalchemy.DateTime)
     comment = sqlalchemy.Column(sqlalchemy.String(100))
-    accept_time_id = sqlalchemy.Column(sqlalchemy.Integer,
-                                    sqlalchemy.ForeignKey('accept_time.id', ondelete='CASCADE'))
+    accept_time_id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey('accept_time.id',
+                                                  ondelete='CASCADE'))
     accept_time = orm.relation('AcceptTime')
-
-
-
-

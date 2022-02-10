@@ -1,7 +1,7 @@
 import sqlalchemy
 from sqlalchemy import orm
-from .db_session import SqlAlchemyBase
 
+from .db_session import SqlAlchemyBase
 
 association_table = sqlalchemy.Table(
     'patients_has_patronage', SqlAlchemyBase.metadata,

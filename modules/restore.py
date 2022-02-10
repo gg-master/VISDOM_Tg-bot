@@ -1,13 +1,13 @@
 import logging
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, error
 from telegram.ext import CallbackContext
 
-
-from db_api import get_accept_times_by_patient_id, get_all_patients, \
-    get_all_patronages
-from tools.decorators import not_registered_users
+from db_api import (get_accept_times_by_patient_id, get_all_patients,
+                    get_all_patronages, get_all_records_by_accept_time)
 from modules.patient_list import patient_list
+from modules.timer import remove_job_if_exists
+from tools.decorators import not_registered_users
 
 
 class Restore:
@@ -39,8 +39,10 @@ class Restore:
         # Восстановление обычных Daily тасков
         p.recreate_notification(self.context)
 
-        # Восстановление цикличных тасков. Если для них соответствует время
-        p.restore_repeating_task(self.context)
+        # Если в базе уже есть какие-либо рекорды, то пациент не новенький
+        if get_all_records_by_accept_time(p.accept_times[p.state()[0]]):
+            # Восстановление цикличных тасков. Если для них соответствует время
+            p.restore_repeating_task(self.context)
 
         # Проверяем пациента на время последней записи
         p.check_user_records(self.context)
@@ -64,7 +66,14 @@ class Restore:
         buttons = [[InlineKeyboardButton(text='Восстановить доступ',
                                          callback_data=f'RESTORE_PATIENT')]]
         kb = InlineKeyboardMarkup(buttons)
-        context.bot.send_message(kwargs['chat_id'], text=text, reply_markup=kb)
+        try:
+            context.bot.send_message(kwargs['chat_id'], text=text,
+                                     reply_markup=kb)
+        except error.Unauthorized:
+            for task in (f'{kwargs["chat_id"]}-MOR', f'{kwargs["chat_id"]}-EVE',
+                         f'{kwargs["chat_id"]}-rep_task'):
+                remove_job_if_exists(task, context)
+
 
     @staticmethod
     def restore_patronage_msg(context, **kwargs):
@@ -81,8 +90,8 @@ class Restore:
             context.bot.send_message(
                 kwargs['chat_id'], text=text, reply_markup=keyboard)
         except Exception as e:
-            logging.warning(f"CANT SEND RESTORE_MSG TO PATRONAGE. "
-                            f"CHAT NOT FOUND. \nMORE: {e}")
+            logging.warning(f'CANT SEND RESTORE_MSG TO PATRONAGE. '
+                            f'CHAT NOT FOUND. \nMORE: {e}')
 
 
 @not_registered_users
@@ -96,12 +105,11 @@ def patient_restore_handler(update: Update, context: CallbackContext):
 
     # Если уже пришло уведомление, то переотправляем его после восстановления
     if user.msg_to_del:
-        # Получаем id сообщения из таска, который автоматически удалит
-        # сообщение через некоторое время
+        # Получаем id сообщения иp пользователя
         try:
             context.bot.delete_message(user.chat_id,
                                        user.msg_to_del.message_id)
-        except Exception as e:
+        except error.TelegramError:
             pass
 
     # Удаляем сообщени с кнопкой восстановления
@@ -110,10 +118,6 @@ def patient_restore_handler(update: Update, context: CallbackContext):
         'Доступ восстановлен. Теперь Вы можете добавить ответ на уведомления, '
         'к которым не было доступа.')
     PatientRegistrationDialog.restore_main_msg(update, context)
-    # print(context.job_queue.get_jobs_by_name(
-    #     f'{user.chat_id}-MOR')[0].next_t)
-    # print(context.job_queue.get_jobs_by_name(
-    #     f'{user.chat_id}-EVE')[0].next_t)
 
     # Если уже пришло уведомление, то переотправляем его после восстановления
     if user.msg_to_del:
@@ -126,16 +130,16 @@ def patient_restore_handler(update: Update, context: CallbackContext):
 
 @not_registered_users
 def patronage_restore_handler(update: Update, context: CallbackContext):
-    from modules.users_classes import PatronageUser
     from modules.patronage_dialogs import PatronageJob
+    from modules.users_classes import PatronageUser
 
     p = context.user_data['user'] = PatronageUser(update.effective_chat.id)
-    p.restore(context)
+    p.restore()
     logging.info(f'RESTORED PATRONAGE: {p.chat_id}')
     try:
         update.callback_query.delete_message()
         update.effective_chat.send_message('Доступ восстановлен.')
         PatronageJob.default_job(update, context)
     except Exception as e:
-        logging.warning(f"CANT SEND RESTORE_MSG TO PATIENT. CHAT NOT FOUND."
-                        f"\nMORE: {e}")
+        logging.warning(f'CANT SEND RESTORE_MSG TO PATIENT. CHAT NOT FOUND.'
+                        f'\nMORE: {e}')

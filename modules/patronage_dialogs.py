@@ -1,17 +1,17 @@
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ConversationHandler, MessageHandler, Filters, \
-    CommandHandler, CallbackContext, CallbackQueryHandler
-
-from modules.dialogs_shortcuts.start_shortcuts import SEND_USER_DATA_PAT, END,\
-    EXCLUDE_PATIENT
-
-from db_api import get_patient_by_user_code, \
-    make_file_by_patient_user_code, make_file_patients, make_patient_list, \
-    patient_exists_by_user_code, change_patients_membership
-
+import logging
 from os import remove
+
+from telegram import ReplyKeyboardMarkup, Update
+from telegram.ext import (CallbackContext, CallbackQueryHandler,
+                          CommandHandler, ConversationHandler, Filters,
+                          MessageHandler)
+
+from db_api import (change_patients_membership, get_patient_by_user_code,
+                    make_file_by_patient_user_code, make_file_patients,
+                    make_patient_list, patient_exists_by_user_code)
+from modules.dialogs_shortcuts.start_shortcuts import (END, EXCLUDE_PATIENT,
+                                                       SEND_USER_DATA_PAT)
 from modules.patient_list import patient_list
-from modules.timer import remove_job_if_exists
 from tools.decorators import registered_patronages
 
 
@@ -48,9 +48,10 @@ class PatronageJob(ConversationHandler):
 
     @staticmethod
     def default_job(update: Update, context: CallbackContext):
-        text = "Для использовния базовго функционала нажмите на" \
-               " одну из нужных кнопок. \nЧтобы прервать выполнение " \
-               "команд отправьте /stop."
+        text = 'Для использовния базовго функционала нажмите на' \
+               ' одну из нужных кнопок. \nЧтобы прервать выполнение ' \
+               'команд отправьте /stop.'
+
         keyboard = ReplyKeyboardMarkup(
             [['Получить данные по пациенту',
               'Получить данные по всем пользователям'],
@@ -81,15 +82,17 @@ class PatronageJob(ConversationHandler):
         if patient_exists_by_user_code(user_code):
             try:
                 make_file_by_patient_user_code(user_code)
+
                 update.effective_chat.send_document(
                     open(f'static/{user_code}_data.xlsx', 'rb'))
+
                 remove(f'static/{user_code}_data.xlsx')
             except FileNotFoundError as ex:
-                print(ex)
+                logging.info(ex)
                 update.message.reply_text(
                     'Файл не найден. Обратитесь к администратору.')
             except Exception as ex:
-                print(ex)
+                logging.info(ex)
         else:
             update.message.reply_text(
                 'Пациента с таким кодом не существует')
@@ -135,12 +138,12 @@ class PatronageJob(ConversationHandler):
                 open('static/statistics.csv', 'rb'))
             remove('static/statistics.csv')
         except FileNotFoundError as ex:
-            print(ex)
+            logging.info(ex)
             update.effective_chat.send_message(
                 'Файл не найден. Обратитесь к администратору.'
             )
         except Exception as ex:
-            print(ex)
+            logging.info(ex)
         return END
 
     @staticmethod
@@ -152,12 +155,12 @@ class PatronageJob(ConversationHandler):
                 open('static/Список пациентов.xlsx', 'rb'))
             remove('static/Список пациентов.xlsx')
         except FileNotFoundError as ex:
-            print(ex)
+            logging.info(ex)
             update.effective_chat.send_message(
                 'Файл не найден. Обратитесь к администратору.'
             )
         except Exception as ex:
-            print(ex)
+            logging.info(ex)
         return END
 
     @staticmethod

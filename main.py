@@ -1,17 +1,16 @@
 import logging
 
 from telegram import Update
-from telegram.ext import CommandHandler, Updater, MessageHandler, \
-    Filters, Defaults, CallbackQueryHandler
+from telegram.ext import (CallbackQueryHandler, CommandHandler, Defaults,
+                          Filters, MessageHandler, Updater, CallbackContext)
 
-from modules.restore import Restore, patient_restore_handler, \
-    patronage_restore_handler
-from modules.start_dialogs import StartDialog, PatronageJob
+from modules.notification_dailogs import DataCollectionDialog, PillTakingDialog
+from modules.restore import (Restore, patient_restore_handler,
+                             patronage_restore_handler)
 from modules.settings_dialogs import SettingsDialog
-from modules.notification_dailogs import PillTakingDialog, DataCollectionDialog
-from modules.timer import *
+from modules.start_dialogs import PatronageJob, StartDialog
+
 from tools.tools import get_from_env
-from tools.prepared_answers import *
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)s %(name)s %(message)s')
@@ -38,14 +37,6 @@ def help_msg(update: Update, context: CallbackContext):
     elif type(context.user_data.get('user')) is PatronageUser:
         update.message.reply_text("Справка. Команды для патронажа.")
 
-
-# def echo(update: Update, context: CallbackContext):
-#     import pytz
-#     date = update.message.date
-#     tz = pytz.timezone('Etc/Gmt-3')
-#     print(tz.normalize(date), '\n', date.astimezone(tz))
-#     update.message.reply_text(update.message.text)
-#
 
 def main():
     updater = Updater(get_from_env('TOKEN'),
@@ -74,14 +65,12 @@ def main():
     dp.add_handler(MessageHandler(Filters.regex('Справка$'), help_msg))
 
     dp.add_handler(MessageHandler(Filters.command, unknown))
-    # dp.add_handler(MessageHandler(Filters.text, echo))
 
     updater.start_polling()
+
     # Ждём завершения приложения.
-    # (например, получения сигнала SIG_TERM при нажатии клавиш Ctrl+C)
     updater.idle()
 
 
-# Запускаем функцию main() в случае запуска скрипта.
 if __name__ == '__main__':
     main()
