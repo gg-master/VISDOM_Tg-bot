@@ -95,6 +95,12 @@ class StartDialog(ConversationHandler):
 
 
 class PatientRegistrationDialog(ConversationHandler):
+    post_reg_kb = ReplyKeyboardMarkup(
+        [['❔Справка', '⚙️Настройки'],
+         # ['Покинуть исследование']
+         ],
+        row_width=1, resize_keyboard=True)
+
     def __init__(self):
         super().__init__(
             name=self.__class__.__name__,
@@ -210,11 +216,9 @@ class PatientRegistrationDialog(ConversationHandler):
         update.callback_query.answer()
         update.callback_query.delete_message()
 
-        keyboard = ReplyKeyboardMarkup([['❔Справка', '⚙️Настройки']],
-                                       row_width=1, resize_keyboard=True)
-
         msg = context.bot.send_message(
-            update.effective_chat.id, text=text, reply_markup=keyboard)
+            update.effective_chat.id, text=text,
+            reply_markup=PatientRegistrationDialog.post_reg_kb)
 
         # Закрепляем сообщение, чтобы пользователь не потерялся
         update.effective_chat.unpin_all_messages()
@@ -248,11 +252,9 @@ class PatientRegistrationDialog(ConversationHandler):
                f'напомнит о необходимости измерить и сообщить ' \
                f'артериальное давление и частоту сердечных сокращений еще раз'
 
-        keyboard = ReplyKeyboardMarkup([['❔Справка', '⚙️Настройки']],
-                                       row_width=1, resize_keyboard=True)
-
         msg = context.bot.send_message(
-            update.effective_chat.id, text=text, reply_markup=keyboard)
+            update.effective_chat.id, text=text,
+            reply_markup=PatientRegistrationDialog.post_reg_kb)
         update.effective_chat.unpin_all_messages()
         update.effective_chat.pin_message(msg.message_id)
 

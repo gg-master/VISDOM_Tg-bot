@@ -94,31 +94,29 @@ class SettingsDialog(ConversationHandler):
 
     @staticmethod
     def confirm(update: Update, context: CallbackContext):
+        from modules.start_dialogs import PatientRegistrationDialog
         update.callback_query.delete_message()
-        keyboard = ReplyKeyboardMarkup([['❔Справка', '⚙️Настройки']],
-                                       row_width=1, resize_keyboard=True)
         try:
             context.user_data['user'].save_updating(context)
             text = 'Изменения сохранены.'
-            update.effective_chat.send_message(text=text,
-                                               reply_markup=keyboard)
+            update.effective_chat.send_message(
+                text=text,
+                reply_markup=PatientRegistrationDialog.post_reg_kb)
         except ValueError:
             context.user_data['user'].cancel_updating()
             text = 'Изменения не удалось сохранить.\n' \
                    'Попробуйте снова через некоторое время.'
             update.effective_chat.send_message(
-                text=text, reply_markup=keyboard)
+                text=text, reply_markup=PatientRegistrationDialog.post_reg_kb)
         finally:
             return END
 
     @staticmethod
     def stop(update: Update, context: CallbackContext):
+        from modules.start_dialogs import PatientRegistrationDialog
         context.user_data['user'].cancel_updating()
 
         text = 'Изменения не были сохранеы.'
-
-        keyboard = ReplyKeyboardMarkup([['❔Справка', '⚙️Настройки']],
-                                       row_width=1, resize_keyboard=True)
 
         if update.callback_query:
             update.callback_query.delete_message()
@@ -126,7 +124,8 @@ class SettingsDialog(ConversationHandler):
             context.bot.delete_message(update.effective_chat.id,
                                        context.chat_data['st_msg'])
 
-        update.effective_chat.send_message(text=text, reply_markup=keyboard)
+        update.effective_chat.send_message(
+            text=text, reply_markup=PatientRegistrationDialog.post_reg_kb)
         return END
 
     @staticmethod
@@ -196,3 +195,38 @@ class SettingsConfTZDialog(ConfigureTZDialog):
         context.user_data[START_OVER] = True
         SettingsDialog.start(update, context)
         return END
+
+
+# class LeaveStudy(ConversationHandler):
+#     def __init__(self):
+#         super().__init__(
+#             name=self.__class__.__name__,
+#             entry_points=[MessageHandler(
+#                 Filters.regex('^Покинуть исследование$'), self.start)],
+#             states={
+#                 SETTINGS_ACTION: [
+#                     CallbackQueryHandler(self.confirm,
+#                                          pattern='LEAVE_STUDY_CONFIRMED')
+#                 ]
+#             },
+#             fallbacks=[
+#                 CommandHandler('stop', self.stop),
+#             ]
+#         )
+#
+#     @staticmethod
+#     @registered_patient
+#     def start(update: Update, context: CallbackContext):
+#         text = 'Вы действительно хотите покинуть исследование?'
+#
+#         kb = InlineKeyboardMarkup([[InlineKeyboardButton(
+#             'Подтвердить', callback_data='LEAVE_STUDY_CONFIRMED')]])
+#
+#         update.effective_chat.send_message(text, reply_markup=kb)
+#
+#     @staticmethod
+#     def confirm(update: Update, context: CallbackContext):
+#         text = 'Вы исключены из исследования!'
+#
+#         update.callback_query.edit_message_text(text)
+#         update.callback_query.edit_message_reply_markup()

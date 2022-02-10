@@ -6,6 +6,7 @@ from telegram.ext import CallbackContext
 from db_api import (get_accept_times_by_patient_id, get_all_patients,
                     get_all_patronages, get_all_records_by_accept_time)
 from modules.patient_list import patient_list
+from modules.timer import remove_job_if_exists
 from tools.decorators import not_registered_users
 
 
@@ -65,7 +66,14 @@ class Restore:
         buttons = [[InlineKeyboardButton(text='Восстановить доступ',
                                          callback_data=f'RESTORE_PATIENT')]]
         kb = InlineKeyboardMarkup(buttons)
-        context.bot.send_message(kwargs['chat_id'], text=text, reply_markup=kb)
+        try:
+            context.bot.send_message(kwargs['chat_id'], text=text,
+                                     reply_markup=kb)
+        except error.Unauthorized:
+            for task in (f'{kwargs["chat_id"]}-MOR', f'{kwargs["chat_id"]}-EVE',
+                         f'{kwargs["chat_id"]}-rep_task'):
+                remove_job_if_exists(task, context)
+
 
     @staticmethod
     def restore_patronage_msg(context, **kwargs):
