@@ -1,4 +1,5 @@
 import logging
+import datetime as dt
 from typing import Dict, Optional
 
 from telegram import error
@@ -39,10 +40,11 @@ def create_daily_notification(context: CallbackContext, **kwargs):
 
 def daily_task(context: CallbackContext):
     """Таски, которые выполняются ежедневно утром и вечером"""
+    from modules.users_classes import PatientUser
     job = context.job
     data: Optional[Dict] = job.context
 
-    user = data['user']
+    user: PatientUser = data['user']
 
     user.alarmed[data['name']] = False
 
@@ -57,8 +59,8 @@ def daily_task(context: CallbackContext):
             context.bot.delete_message(user.chat_id,
                                        user.msg_to_del.message_id)
         except Exception as e:
-            logging.exception(f'Cant find message id to delete in daily task. '
-                              f'More:{e}')
+            logging.info(f'Cant find message id to delete in daily task. '
+                         f'More:{e}')
     remove_job_if_exists(f'{user.chat_id}-rep_task', context)
 
     # Если с момента последней записи прошло более 24 часов, то устанавливаем
@@ -67,9 +69,14 @@ def daily_task(context: CallbackContext):
         user.notification_states[data['name']][
             user.state()[1]].pre_start(context, data)
 
+        n = dt.datetime.now(tz=user.tz).time()
+        f = user.tz.localize(user.times[data['name']])
+
         context.job_queue.run_repeating(
             callback=repeating_task,
             interval=data['task_data']['interval'],
+            first=PatientUser.calc_start_time(
+                n, f, data['task_data']['interval']),
             last=data['task_data']['last'],
             context=data,
             name=f'{user.chat_id}-rep_task'
@@ -102,6 +109,9 @@ def deleting_pre_start_msg_task(context: CallbackContext):
 
         context.bot.delete_message(user.chat_id, user.msg_to_del.message_id)
         user.msg_to_del = None
+
+        user.clear_responses()
+        user.save_patient_record()
 
         user.check_user_records(context)
     except error.TelegramError:

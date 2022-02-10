@@ -128,6 +128,14 @@ def add_record(**kwargs: Any) -> None:
 def get_last_record_by_accept_time(accept_time_id):
     with db_session.create_session() as db_sess:
         records = db_sess.query(Record).filter(
+            Record.accept_time_id == accept_time_id,
+            Record.sys_press != None).all()
+        return records
+
+
+def get_all_records_by_accept_time(accept_time_id):
+    with db_session.create_session() as db_sess:
+        records = db_sess.query(Record).filter(
             Record.accept_time_id == accept_time_id).all()
         return records
 
@@ -210,7 +218,7 @@ def make_patient_list():
     wb = Workbook()
     ws = wb.active
     for i in range(len(patients_user_codes)):
-        cell = ws.cell(row=i+1, column=1, value=patients_user_codes[i][0])
+        cell = ws.cell(row=i + 1, column=1, value=patients_user_codes[i][0])
         if not patients_user_codes[i][1]:
             cell.fill = styles.PatternFill('solid', fgColor='FF0000')
     wb.save(filename=f'static/Список пациентов.xlsx')

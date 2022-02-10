@@ -4,7 +4,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, error
 from telegram.ext import CallbackContext
 
 from db_api import (get_accept_times_by_patient_id, get_all_patients,
-                    get_all_patronages)
+                    get_all_patronages, get_all_records_by_accept_time)
 from modules.patient_list import patient_list
 from tools.decorators import not_registered_users
 
@@ -38,8 +38,10 @@ class Restore:
         # Восстановление обычных Daily тасков
         p.recreate_notification(self.context)
 
-        # Восстановление цикличных тасков. Если для них соответствует время
-        p.restore_repeating_task(self.context)
+        # Если в базе уже есть какие-либо рекорды, то пациент не новенький
+        if get_all_records_by_accept_time(p.accept_times[p.state()[0]]):
+            # Восстановление цикличных тасков. Если для них соответствует время
+            p.restore_repeating_task(self.context)
 
         # Проверяем пациента на время последней записи
         p.check_user_records(self.context)

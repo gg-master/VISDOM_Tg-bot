@@ -88,11 +88,11 @@ class PatronageJob(ConversationHandler):
 
                 remove(f'static/{user_code}_data.xlsx')
             except FileNotFoundError as ex:
-                logging.exception(ex)
+                logging.info(ex)
                 update.message.reply_text(
                     'Файл не найден. Обратитесь к администратору.')
             except Exception as ex:
-                logging.exception(ex)
+                logging.info(ex)
         else:
             update.message.reply_text(
                 'Пациента с таким кодом не существует')
@@ -138,12 +138,12 @@ class PatronageJob(ConversationHandler):
                 open('static/statistics.csv', 'rb'))
             remove('static/statistics.csv')
         except FileNotFoundError as ex:
-            logging.exception(ex)
+            logging.info(ex)
             update.effective_chat.send_message(
                 'Файл не найден. Обратитесь к администратору.'
             )
         except Exception as ex:
-            logging.exception(ex)
+            logging.info(ex)
         return END
 
     @staticmethod
@@ -155,12 +155,12 @@ class PatronageJob(ConversationHandler):
                 open('static/Список пациентов.xlsx', 'rb'))
             remove('static/Список пациентов.xlsx')
         except FileNotFoundError as ex:
-            logging.exception(ex)
+            logging.info(ex)
             update.effective_chat.send_message(
                 'Файл не найден. Обратитесь к администратору.'
             )
         except Exception as ex:
-            logging.exception(ex)
+            logging.info(ex)
         return END
 
     @staticmethod

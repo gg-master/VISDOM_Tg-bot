@@ -121,13 +121,20 @@ class PatientUser(BasicUser):
                 task_data={
                     'interval': dt.timedelta(hours=1) if name == 'MOR'
                     else dt.timedelta(minutes=30),
-                    'last': self.tz.localize(self.time_limiters[name][1]
-                                             ).astimezone(pytz.utc).time()},
+                    'last': self.tz.localize(self.time_limiters[name][1])
+                           .astimezone(pytz.utc).time()},
             )
 
     def recreate_notification(self, context: CallbackContext, **kwargs):
         remove_job_if_exists(f'{self.chat_id}-rep_task', context)
         self.create_notification(context, **kwargs)
+
+    @staticmethod
+    def calc_start_time(now, first, interval):
+        f = dt.timedelta(hours=first.hour, minutes=first.minute)
+        n = dt.timedelta(hours=now.hour, minutes=now.minute)
+
+        return first + interval * (abs(f - n) // interval + 1)
 
     def restore_repeating_task(self, context: CallbackContext, **kwargs):
         """Восстановление повторяющихся сообщений"""
@@ -151,15 +158,10 @@ class PatientUser(BasicUser):
         interval = dt.timedelta(hours=1) if state_name == 'MOR' \
             else dt.timedelta(minutes=30)
 
-        f = dt.timedelta(hours=first.hour, minutes=first.minute)
-        n = dt.timedelta(hours=now.hour, minutes=now.minute)
-
-        first = first + interval * (abs(f - n) // interval + 1)
-
         context.job_queue.run_repeating(
             callback=repeating_task,
             interval=interval,
-            first=first,
+            first=PatientUser.calc_start_time(now, first, interval),
             last=last.astimezone(pytz.utc).time(),
             context={'user': self, 'name': state_name},
             name=f'{self.chat_id}-rep_task'
@@ -347,11 +349,10 @@ class PatientUser(BasicUser):
         recs = get_last_record_by_accept_time(self.accept_times[name])
         hours = 24
         if recs:
+            rec_t: dt.datetime = recs[-1].response_time.astimezone(self.tz)
             now = dt.datetime.now(tz=self.tz)
-            hours = abs(now - recs[-1].response_time.astimezone(
-                self.tz)).total_seconds() // 3600
-            if hours < 24:
-                return True, hours
+            hours = abs(now - rec_t).total_seconds() // 3600
+            return now.date() == rec_t.date(), hours
         return False, hours
 
 
@@ -365,7 +366,7 @@ class PatronageUser(BasicUser):
         logging.info(f'REGISTER NEW PATRONAGE: {update.effective_user.id}')
         Thread(target=self._threading_reg).start()
 
-    def restore(self,):
+    def restore(self):
         super().register()
 
     def _threading_reg(self):
