@@ -41,7 +41,8 @@ class Restore:
 
         # Если в базе уже есть какие-либо рекорды, то пациент не новенький
         if p.state()[0] == 'EVE' or \
-                get_all_records_by_accept_time(p.accept_times[p.state()[0]]):
+                get_all_records_by_accept_time(p.accept_times['EVE']) or \
+                get_all_records_by_accept_time(p.accept_times['MOR']):
             # Восстановление цикличных тасков. Если для них соответствует время
             p.restore_repeating_task(self.context)
 
