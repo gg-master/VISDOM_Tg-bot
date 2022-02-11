@@ -1,4 +1,5 @@
 import csv
+import os
 from typing import Any
 
 from openpyxl import Workbook, styles
@@ -141,6 +142,9 @@ def get_all_records_by_accept_time(accept_time_id):
 
 
 def make_file_by_patient_user_code(user_code):
+    if not os.path.isdir("static"):
+        os.mkdir("static")
+
     with db_session.create_session() as db_sess:
         records = db_sess.execute(f"""SELECT record.sys_press,
                   record.dias_press, record.heart_rate, record.time,
@@ -166,6 +170,9 @@ def make_file_by_patient_user_code(user_code):
 
 
 def make_file_patients():
+    if not os.path.isdir("static"):
+        os.mkdir("static")
+
     with db_session.create_session() as db_sess:
         records = db_sess.execute('SELECT patient.id, patient.user_code,'
                                   ' record.sys_press, record.dias_press,'
@@ -212,6 +219,9 @@ def get_all_patients_v2():
 
 
 def make_patient_list():
+    if not os.path.isdir("static"):
+        os.mkdir("static")
+
     with db_session.create_session() as db_sess:
         patients_user_codes = db_sess.query(Patient.user_code,
                                             Patient.member).all()

@@ -1,4 +1,5 @@
 import logging
+import os
 
 from telegram import Update, error
 from telegram.ext import (CallbackQueryHandler, CommandHandler, Defaults,
@@ -46,6 +47,9 @@ def help_msg(update: Update, context: CallbackContext):
 
 
 def main():
+    if not os.path.isdir("static"):
+        os.mkdir("static")
+
     updater = Updater(get_from_env('TOKEN'),
                       use_context=True, defaults=Defaults(run_async=True))
 
