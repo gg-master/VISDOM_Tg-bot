@@ -25,7 +25,8 @@ db_sess = db_session.create_session()
 
 
 class BasicUser:
-    def __init__(self):
+    def __init__(self, chat_id):
+        self.chat_id = chat_id
         self.is_registered = False
 
     def registered(self):
@@ -33,6 +34,17 @@ class BasicUser:
 
     def register(self, *args):
         self.is_registered = True
+
+    def check_user_reg(self):
+        patient = get_patient_by_chat_id(self.chat_id)
+        patronage = get_patronage_by_chat_id(self.chat_id)
+        if patient or patronage:
+            if not patronage and not patient.member:
+                return 0
+            if patronage:
+                return 2
+            return -1
+        return 1
 
 
 class PatientUser(BasicUser):
@@ -52,9 +64,7 @@ class PatientUser(BasicUser):
     }
 
     def __init__(self, chat_id: int):
-        super().__init__()
-        self.chat_id = chat_id
-
+        super().__init__(chat_id)
         self.code = None
 
         self.location = self.tz = self.accept_times = None
@@ -324,15 +334,6 @@ class PatientUser(BasicUser):
             else self.pill_response
         )
 
-    def check_user_reg(self):
-        patient = get_patient_by_chat_id(self.chat_id)
-        patronage = get_patronage_by_chat_id(self.chat_id)
-        if patient or patronage:
-            if not patronage and not patient.member:
-                return False
-            return None
-        return True
-
     def check_user_records(self, context: CallbackContext):
         # Если аларм у пользователя уже сработал, то заново не активируем
         if any(self.alarmed.values()) or not self.accept_times:
@@ -370,8 +371,7 @@ class PatientUser(BasicUser):
 
 class PatronageUser(BasicUser):
     def __init__(self, chat_id):
-        super().__init__()
-        self.chat_id = chat_id
+        super().__init__(chat_id)
 
     def register(self, update: Update, context: CallbackContext):
         super().register()
