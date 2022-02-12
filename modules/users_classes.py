@@ -25,6 +25,11 @@ db_sess = db_session.create_session()
 
 
 class BasicUser:
+    USER_EXCLUDED = 0
+    USER_IS_PATIENT = 1
+    USER_IS_PATRONAGE = 2
+    USER_IS_NOT_REGISTERED = -1
+
     def __init__(self, chat_id):
         self.chat_id = chat_id
         self.is_registered = False
@@ -36,15 +41,22 @@ class BasicUser:
         self.is_registered = True
 
     def check_user_reg(self):
+        patient_f_p_list = patient_list.get(self.chat_id)
         patient = get_patient_by_chat_id(self.chat_id)
         patronage = get_patronage_by_chat_id(self.chat_id)
-        if patient or patronage:
-            if not patronage and not patient.member:
-                return 0
+
+        if patient or patient_f_p_list or patronage:
+            # Если пациент не участвует в исследовании
+            if not patronage and (not patient.member or
+                                  not patient_f_p_list.registered()):
+                return self.USER_EXCLUDED
+            # Если пользователь был зарегистрирован как патронаж
             if patronage:
-                return 2
-            return -1
-        return 1
+                return self.USER_IS_PATRONAGE
+            # Если пользователь бал зарегистрирован как пациент
+            return self.USER_IS_PATIENT
+        # Пользователь не зарегистрирован
+        return self.USER_IS_NOT_REGISTERED
 
 
 class PatientUser(BasicUser):
@@ -298,6 +310,9 @@ class PatientUser(BasicUser):
         Thread(target=self._threading_reg, args=(update, context)).start()
 
     def _threading_reg(self, update: Update, context: CallbackContext):
+        # Добавляем пациента в список пациентов
+        patient_list[self.chat_id] = self
+
         self.tz = pytz.timezone(convert_tz(self.location.get_coords(),
                                            self.location.time_zone()))
         self.orig_loc = self.location = Location(tz=-int(re.search(
@@ -312,7 +327,6 @@ class PatientUser(BasicUser):
             time_zone=self.tz.zone,
             chat_id=self.chat_id
         )
-        patient_list[self.chat_id] = self
         self.save_updating(context, check_user=False)
 
     def save_patient_record(self):
