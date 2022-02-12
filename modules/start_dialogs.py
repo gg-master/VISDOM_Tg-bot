@@ -43,7 +43,7 @@ class StartDialog(ConversationHandler):
     @user_separation
     def start(update: Update, context: CallbackContext):
         if not context.user_data.get('user'):
-            context.user_data['user'] = BasicUser()
+            context.user_data['user'] = BasicUser(update.effective_chat.id)
 
         buttons = [
             [InlineKeyboardButton(text='Зарегистрироваться',
@@ -144,9 +144,11 @@ class PatientRegistrationDialog(ConversationHandler):
         if type(user) is BasicUser:
             context.user_data['user'] = PatientUser(update.effective_chat.id)
         res = context.user_data['user'].check_user_reg()
-        if not res:
+        if res <= 0:
             return PatientRegistrationDialog.cant_registered(
                 update, context, res)
+        if res == 2:
+            return PatronageRegistrationDialog.pre_start(update, context)
         return PatientRegistrationDialog.start(update, context)
 
     @staticmethod
@@ -240,7 +242,7 @@ class PatientRegistrationDialog(ConversationHandler):
     def cant_registered(update: Update, context: CallbackContext, res):
         update.callback_query.delete_message()
         try:
-            if res is not None:
+            if res == 0:
                 text = 'Вы были исключены из исследования и не можете ' \
                        'повторно зарегистрироваться.'
                 update.effective_chat.send_message(text)
@@ -519,7 +521,8 @@ class PatronageRegistrationDialog(ConversationHandler):
             name=self.__class__.__name__,
             entry_points=[CallbackQueryHandler(
                 self.pre_start, pattern=f'^{SIGN_UP_AS_PATRONAGE}$'),
-                CommandHandler('reg_patronage', self.pre_start)],
+                CommandHandler('reg_patronage', self.pre_start,
+                               run_async=False)],
             states={
                 TYPING_TOKEN: [
                     MessageHandler(Filters.text & ~Filters.command,
@@ -545,12 +548,14 @@ class PatronageRegistrationDialog(ConversationHandler):
         if get_patronage_by_chat_id(update.effective_chat.id):
             text = 'Вы не можете повторно зарегистрироваться.\n'
             try:
-                update.effective_chat.send_message(text)
+                context.bot.edit_message_text(text, update.effective_chat.id,
+                                              context.chat_data['st_msg'],
+                                              reply_markup=None)
             except error.Unauthorized:
                 return STOPPING
             Restore.restore_patronage_msg(
                 context, chat_id=update.effective_chat.id)
-            return END
+            return STOPPING
         return PatronageRegistrationDialog.start(update, context)
 
     @staticmethod
