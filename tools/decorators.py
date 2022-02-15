@@ -3,21 +3,23 @@ from telegram.ext import CallbackContext
 
 
 def not_registered_users(func):
-    def decorated_func(update: Update, context: CallbackContext):
+    def decorated_func(update: Update, context: CallbackContext,
+                       *args, **kwargs):
         user = context.user_data.get('user')
         if not (user and user.registered()):
-            return func(update, context)
+            return func(update, context, *args, **kwargs)
         return just_for_not_registered_msg(update)
 
     return decorated_func
 
 
 def registered_patient(func):
-    def decorated_func(update: Update, context: CallbackContext):
+    def decorated_func(update: Update, context: CallbackContext,
+                       *args, **kwargs):
         from modules.users_classes import PatientUser
         user = context.user_data.get('user')
         if type(user) is PatientUser and user.registered():
-            return func(update, context)
+            return func(update, context, *args, **kwargs)
         return just_for_registered_msg(update)
 
     return decorated_func
@@ -42,11 +44,11 @@ def just_for_registered_msg(update: Update):
 
 
 def registered_patronages(func):
-    def decorator(update: Update, context: CallbackContext):
+    def decorator(update: Update, context: CallbackContext, *args, **kwargs):
         from modules.users_classes import PatronageUser
         user = context.user_data.get('user')
         if type(user) is PatronageUser and user.registered():
-            return func(update, context)
+            return func(update, context, *args, **kwargs)
         return just_for_patronage(update)
     return decorator
 

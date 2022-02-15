@@ -144,11 +144,12 @@ class PatientRegistrationDialog(ConversationHandler):
         if type(user) is BasicUser:
             context.user_data['user'] = PatientUser(update.effective_chat.id)
         res = context.user_data['user'].check_user_reg()
-        if res <= 0:
+        if res in [BasicUser.USER_EXCLUDED, BasicUser.USER_IS_PATIENT]:
             return PatientRegistrationDialog.cant_registered(
                 update, context, res)
-        if res == 2:
-            return PatronageRegistrationDialog.pre_start(update, context)
+        if res == BasicUser.USER_IS_PATRONAGE:
+            return PatronageRegistrationDialog.pre_start(update, context,
+                                                         res=res)
         return PatientRegistrationDialog.start(update, context)
 
     @staticmethod
@@ -240,9 +241,10 @@ class PatientRegistrationDialog(ConversationHandler):
 
     @staticmethod
     def cant_registered(update: Update, context: CallbackContext, res):
-        update.callback_query.delete_message()
+        context.bot.delete_message(update.effective_chat.id,
+                                   context.chat_data['st_msg'])
         try:
-            if res == 0:
+            if res == BasicUser.USER_EXCLUDED:
                 text = 'Вы были исключены из исследования и не можете ' \
                        'повторно зарегистрироваться.'
                 update.effective_chat.send_message(text)
@@ -544,8 +546,9 @@ class PatronageRegistrationDialog(ConversationHandler):
 
     @staticmethod
     @not_registered_users
-    def pre_start(update: Update, context: CallbackContext):
-        if get_patronage_by_chat_id(update.effective_chat.id):
+    def pre_start(update: Update, context: CallbackContext, res=None):
+        res = context.user_data['user'].check_user_reg() if not res else res
+        if res == BasicUser.USER_IS_PATRONAGE:
             text = 'Вы не можете повторно зарегистрироваться.\n'
             try:
                 context.bot.edit_message_text(text, update.effective_chat.id,
@@ -556,13 +559,16 @@ class PatronageRegistrationDialog(ConversationHandler):
             Restore.restore_patronage_msg(
                 context, chat_id=update.effective_chat.id)
             return STOPPING
+        if res in [BasicUser.USER_EXCLUDED, BasicUser.USER_IS_PATIENT]:
+            return PatientRegistrationDialog.cant_registered(
+                update, context, res)
         return PatronageRegistrationDialog.start(update, context)
 
     @staticmethod
     def start(update: Update, context: CallbackContext):
         text = f'Введите токен для регистрации сотрудника.'
 
-        context.bot.delete_message(update.message.chat_id,
+        context.bot.delete_message(update.effective_chat.id,
                                    context.chat_data['st_msg'])
         try:
             msg = update.message.reply_text(text=text)
