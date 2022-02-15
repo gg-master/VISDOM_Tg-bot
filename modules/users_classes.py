@@ -183,7 +183,7 @@ class PatientUser(BasicUser):
         # Если рестар был между лимитами определенного уведомления, то
         # восстанавливаем репитер, чтобы отправить уведомление
         now = dt.datetime.now(tz=self.tz).time()
-        first = self.tz.localize(self.times[state_name])
+        first = self.tz.localize(self.time_limiters[state_name][0])
         last = self.tz.localize(self.time_limiters[state_name][1])
 
         if now < first.time() or now > last.time():

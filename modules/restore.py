@@ -122,6 +122,11 @@ def patient_restore_handler(update: Update, context: CallbackContext):
 
         # Если уже пришло уведомление, то переотправляем его
         if user.msg_to_del:
+            try:
+                context.bot.delete_message(user.chat_id,
+                                           user.msg_to_del.message_id)
+            except error.TelegramError:
+                pass
             # Снова отображаем удаленное уведомление
             user.notification_states[user.state()[0]][
                 user.state()[1]].pre_start(

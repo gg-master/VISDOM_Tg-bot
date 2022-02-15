@@ -491,7 +491,7 @@ class ConfigureNotifTimeDialog(ConversationHandler):
             tm, update.callback_query.data)
 
         text = f'''Изменение времени получения {"вечерних" 
-        if "EVE" == "EVE" else "утренних"} уведомлений.\n'''
+        if tm == "EVE" else "утренних"} уведомлений.\n'''
 
         if not res and context.user_data.get('lim'):
             return TIME_CHANGE
