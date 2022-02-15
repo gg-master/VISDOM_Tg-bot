@@ -135,7 +135,9 @@ class PatientUser(BasicUser):
                     not get_all_records_by_accept_time(
                         self.accept_times['EVE']) and
                     not get_all_records_by_accept_time(
-                        self.accept_times['MOR'])))):
+                        self.accept_times['MOR'])))) or \
+                    context.job_queue.get_jobs_by_name(
+                        f'{self.chat_id}-rep_task'):
 
                 next_r_time = now.replace(
                     day=now.day + 1, hour=time.hour, minute=time.minute,
@@ -155,7 +157,6 @@ class PatientUser(BasicUser):
             )
 
     def recreate_notification(self, context: CallbackContext, **kwargs):
-        remove_job_if_exists(f'{self.chat_id}-rep_task', context)
         self.create_notification(context, **kwargs)
 
     @staticmethod
@@ -186,7 +187,8 @@ class PatientUser(BasicUser):
         first = self.tz.localize(self.time_limiters[state_name][0])
         last = self.tz.localize(self.time_limiters[state_name][1])
 
-        if now < first.time() or now > last.time():
+        if now < self.tz.localize(self.times[state_name]).time() or \
+                now > last.time():
             return None
 
         interval = dt.timedelta(hours=1) if state_name == 'MOR' \
