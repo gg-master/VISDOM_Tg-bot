@@ -119,9 +119,17 @@ def patient_restore_handler(update: Update, context: CallbackContext):
             'Доступ восстановлен. Теперь Вы можете добавить ответ на '
             'уведомления, к которым не было доступа.')
         PatientRegistrationDialog.restore_main_msg(update, context)
-
+        # print(context.job_queue.get_jobs_by_name(
+        #     f'{context.user_data["user"].chat_id}-EVE')[0].next_t)
+        # print(context.job_queue.get_jobs_by_name(
+        #     f'{context.user_data["user"].chat_id}-rep_task')[0].next_t)
         # Если уже пришло уведомление, то переотправляем его
         if user.msg_to_del:
+            try:
+                context.bot.delete_message(user.chat_id,
+                                           user.msg_to_del.message_id)
+            except error.TelegramError:
+                pass
             # Снова отображаем удаленное уведомление
             user.notification_states[user.state()[0]][
                 user.state()[1]].pre_start(

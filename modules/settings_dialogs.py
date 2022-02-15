@@ -100,6 +100,12 @@ class SettingsDialog(ConversationHandler):
         update.callback_query.delete_message()
         try:
             context.user_data['user'].save_updating(context)
+            # print(context.job_queue.get_jobs_by_name(
+            #     f'{context.user_data["user"].chat_id}-EVE')[0].next_t)
+            # job1 = context.job_queue.get_jobs_by_name(
+            #     f'{context.user_data["user"].chat_id}-rep_task')
+            # if job1:
+            #     print(job1[0].next_t))
             text = 'Изменения сохранены.'
             update.effective_chat.send_message(
                 text=text,

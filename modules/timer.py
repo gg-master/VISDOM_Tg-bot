@@ -98,6 +98,7 @@ def repeating_task(context: CallbackContext):
     if user.msg_to_del:
         context.bot.delete_message(user.chat_id, user.msg_to_del.message_id)
 
+    user.set_curr_state(data['name'])
     user.check_user_records(context)
 
     # Запускаем новое уведомление
