@@ -116,7 +116,7 @@ class PatientUser(BasicUser):
         if not (self.default_times[time].replace(
                 hour=self.default_times[time].hour - 1) <= self.times[time] <=
                 self.default_times[time].replace(
-                    hour=self.default_times[time].hour + 1)):
+                    hour=self.default_times[time].hour + 4)):
             self.times[time] -= delta
             return False
         return True
@@ -129,7 +129,14 @@ class PatientUser(BasicUser):
 
             now = dt.datetime.now(tz=self.tz)
             next_r_time = None
-            if kwargs.get('register') and name == 'MOR':
+            if self.check_last_record_by_name(name)[0] or \
+                    (name == 'MOR' and (
+                    kwargs.get('register') or (
+                    not get_all_records_by_accept_time(
+                        self.accept_times['EVE']) and
+                    not get_all_records_by_accept_time(
+                        self.accept_times['MOR'])))):
+
                 next_r_time = now.replace(
                     day=now.day + 1, hour=time.hour, minute=time.minute,
                     second=0, microsecond=0)
@@ -164,7 +171,12 @@ class PatientUser(BasicUser):
 
         # После регистрации первое утреннее уведомление придет на след. день
         if self.check_last_record_by_name(state_name)[0] or \
-                (kwargs.get('register') and state_name == 'MOR'):
+                (state_name == 'MOR' and (
+                        kwargs.get('register') or
+                        (not get_all_records_by_accept_time(
+                            self.accept_times['EVE']) and
+                         not get_all_records_by_accept_time(
+                                    self.accept_times['MOR'])))):
             return None
 
         # Проверяем время в которое произошел рестарт.
@@ -288,7 +300,7 @@ class PatientUser(BasicUser):
             hour=times[k].hour, minute=times[k].minute) for k in times.keys()}
 
         self.accept_times = accept_times
-        self.orig_t, self.orig_loc = self.times, self.location
+        self.orig_t, self.orig_loc = self.times.copy(), self.location
 
         self._set_curr_state_by_time()
 
