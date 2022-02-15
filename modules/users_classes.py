@@ -116,7 +116,7 @@ class PatientUser(BasicUser):
         if not (self.default_times[time].replace(
                 hour=self.default_times[time].hour - 1) <= self.times[time] <=
                 self.default_times[time].replace(
-                    hour=self.default_times[time].hour + 4)):
+                    hour=self.default_times[time].hour + 1)):
             self.times[time] -= delta
             return False
         return True
