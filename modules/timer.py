@@ -75,7 +75,7 @@ def daily_task(context: CallbackContext):
             user.state()[1]].pre_start(context, data)
 
         n = dt.datetime.now(tz=user.tz).time()
-        f = user.tz.localize(user.times[data['name']])
+        f = user.tz.localize(user.time_limiters[data['name']][0])
 
         context.job_queue.run_repeating(
             callback=repeating_task,
