@@ -9,10 +9,10 @@ from telegram import Update, error
 from telegram.ext import CallbackContext
 
 from data import db_session
-from db_api import (add_patient, add_patronage, add_record, change_accept_time,
-                    change_patients_time_zone, get_all_patronages,
+from db_api import (add_patient, add_doctor, add_record, change_accept_time,
+                    change_patients_time_zone, get_all_doctors,
                     get_last_record_by_accept_time, get_patient_by_chat_id,
-                    get_patronage_by_chat_id, get_all_records_by_accept_time)
+                    get_doctor_by_chat_id, get_all_records_by_accept_time)
 from modules.location import Location
 from modules.notification_dailogs import DataCollectionDialog, PillTakingDialog
 from modules.patient_list import patient_list
@@ -27,7 +27,7 @@ db_sess = db_session.create_session()
 class BasicUser:
     USER_EXCLUDED = 0
     USER_IS_PATIENT = 1
-    USER_IS_PATRONAGE = 2
+    USER_IS_DOCTOR = 2
     USER_IS_NOT_REGISTERED = -1
 
     def __init__(self, chat_id):
@@ -43,16 +43,16 @@ class BasicUser:
     def check_user_reg(self):
         patient_f_p_list = patient_list.get(self.chat_id)
         patient = get_patient_by_chat_id(self.chat_id)
-        patronage = get_patronage_by_chat_id(self.chat_id)
+        doctor = get_doctor_by_chat_id(self.chat_id)
 
-        if patient or patient_f_p_list or patronage:
+        if patient or patient_f_p_list or doctor:
             # Если пациент не участвует в исследовании
-            if not patronage and (not patient.member or
-                                  not patient_f_p_list.registered()):
+            if not doctor and (not patient.member or
+                               not patient_f_p_list.registered()):
                 return self.USER_EXCLUDED
             # Если пользователь был зарегистрирован как патронаж
-            if patronage:
-                return self.USER_IS_PATRONAGE
+            if doctor:
+                return self.USER_IS_DOCTOR
             # Если пользователь бал зарегистрирован как пациент
             return self.USER_IS_PATIENT
         # Пользователь не зарегистрирован
@@ -374,7 +374,7 @@ class PatientUser(BasicUser):
         if (not mor_record[0] and mor_record[1] >= 25) or \
                 (not eve_record[0] and eve_record[1] >= 25):
             self.alarmed['MOR' if mor_record[1] >= 25 else "EVE"] = True
-            PatronageUser.send_alarm(
+            DoctorUser.send_alarm(
                 context=context,
                 user=self,
                 days=int(mor_record[1] / 24) if self.alarmed['MOR']
@@ -397,29 +397,29 @@ class PatientUser(BasicUser):
         return False, hours
 
 
-class PatronageUser(BasicUser):
+class DoctorUser(BasicUser):
     def __init__(self, chat_id):
         super().__init__(chat_id)
 
     def register(self, update: Update, context: CallbackContext):
         super().register()
-        logging.info(f'REGISTER NEW PATRONAGE: {update.effective_user.id}')
+        logging.info(f'REGISTER NEW DOCTOR: {update.effective_user.id}')
         Thread(target=self._threading_reg).start()
 
     def restore(self):
         super().register()
 
     def _threading_reg(self):
-        add_patronage(chat_id=self.chat_id)
+        add_doctor(chat_id=self.chat_id)
 
     @staticmethod
     def send_alarm(context, **kwargs):
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
         user = kwargs['user']
-        patronage = get_all_patronages()
-        if patronage:
-            patronage = patronage[0]
+        doctor = get_all_doctors()
+        if doctor:
+            doctor = doctor[0]
             text = f'❗️ Внимание ❗️\n' \
                    f'В течении суток пациент {user.code} не принял ' \
                    f'лекарство/не отправил данные давления и ЧСС.\n' \
@@ -431,7 +431,7 @@ class PatronageUser(BasicUser):
                     callback_data=f'A_PATIENT_DATA&{user.code}')]],
                 one_time_keyboard=True)
             try:
-                context.bot.send_message(patronage.chat_id, text,
+                context.bot.send_message(doctor.chat_id, text,
                                          reply_markup=kb)
             except error.Unauthorized:
                 pass

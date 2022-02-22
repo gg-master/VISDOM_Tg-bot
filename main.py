@@ -7,9 +7,9 @@ from telegram.ext import (CallbackQueryHandler, CommandHandler, Defaults,
 
 from modules.notification_dailogs import DataCollectionDialog, PillTakingDialog
 from modules.restore import (Restore, patient_restore_handler,
-                             patronage_restore_handler)
+                             doctor_restore_handler)
 from modules.settings_dialogs import SettingsDialog
-from modules.start_dialogs import PatronageJob, StartDialog
+from modules.start_dialogs import DoctorJob, StartDialog
 
 from tools.tools import get_from_env
 
@@ -26,7 +26,7 @@ def unknown(update: Update, context: CallbackContext):
 
 
 def help_msg(update: Update, context: CallbackContext):
-    from modules.users_classes import BasicUser, PatientUser, PatronageUser
+    from modules.users_classes import BasicUser, PatientUser, DoctorUser
     try:
         if not context.user_data.get('user'):
             update.message.reply_text(
@@ -40,7 +40,7 @@ def help_msg(update: Update, context: CallbackContext):
                 "зарегистрируйтесь.")
         elif type(context.user_data.get('user')) is PatientUser:
             update.message.reply_text("Справка. Команды Для пациента.")
-        elif type(context.user_data.get('user')) is PatronageUser:
+        elif type(context.user_data.get('user')) is DoctorUser:
             update.message.reply_text("Справка. Команды для патронажа.")
     except error.Unauthorized:
         pass
@@ -65,12 +65,12 @@ def main():
 
     dp.add_handler(SettingsDialog())
 
-    dp.add_handler(PatronageJob())
+    dp.add_handler(DoctorJob())
 
     dp.add_handler(CallbackQueryHandler(patient_restore_handler,
                                         pattern='^RESTORE_PATIENT$'))
-    dp.add_handler(CallbackQueryHandler(patronage_restore_handler,
-                                        pattern='^RESTORE_PATRONAGE$'))
+    dp.add_handler(CallbackQueryHandler(doctor_restore_handler,
+                                        pattern='^RESTORE_DOCTOR$'))
 
     dp.add_handler(CommandHandler("help", help_msg))
     dp.add_handler(MessageHandler(Filters.regex('Справка$'), help_msg))

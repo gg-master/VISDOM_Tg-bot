@@ -7,7 +7,7 @@ from openpyxl import Workbook, styles
 from data import db_session
 from data.accept_time import AcceptTime
 from data.patient import Patient
-from data.patronage import Patronage
+from data.doctor import Doctor
 from data.record import Record
 
 db_session.global_init()
@@ -101,22 +101,22 @@ def patient_exists_by_user_code(user_code):
             Patient.user_code == user_code).exists()).scalar()
 
 
-def add_patronage(**kwargs: Any) -> None:
+def add_doctor(**kwargs: Any) -> None:
     with db_session.create_session() as db_sess:
-        patronage = Patronage(**kwargs)
-        db_sess.add(patronage)
+        doctor = Doctor(**kwargs)
+        db_sess.add(doctor)
         db_sess.commit()
 
 
-def get_all_patronages():
+def get_all_doctors():
     with db_session.create_session() as db_sess:
-        return db_sess.query(Patronage).all()
+        return db_sess.query(Doctor).all()
 
 
-def get_patronage_by_chat_id(chat_id: int) -> Patronage:
+def get_doctor_by_chat_id(chat_id: int) -> Doctor:
     with db_session.create_session() as db_sess:
-        return db_sess.query(Patronage).filter(Patronage.chat_id
-                                               == chat_id).first()
+        return db_sess.query(Doctor).filter(Doctor.chat_id
+                                            == chat_id).first()
 
 
 def add_record(**kwargs: Any) -> None:

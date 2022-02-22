@@ -20,3 +20,7 @@ class Record(SqlAlchemyBase):
         sqlalchemy.Integer, sqlalchemy.ForeignKey('accept_time.id',
                                                   ondelete='CASCADE'))
     accept_time = orm.relation('AcceptTime')
+
+
+
+

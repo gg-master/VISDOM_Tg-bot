@@ -12,24 +12,24 @@ from db_api import (change_patients_membership, get_patient_by_user_code,
 from modules.dialogs_shortcuts.start_shortcuts import (END, EXCLUDE_PATIENT,
                                                        SEND_USER_DATA_PAT)
 from modules.patient_list import patient_list
-from tools.decorators import registered_patronages
+from tools.decorators import registered_doctors
 
 
-class PatronageJob(ConversationHandler):
+class DoctorJob(ConversationHandler):
     def __init__(self):
         super().__init__(
             name=self.__class__.__name__,
             entry_points=[
                 MessageHandler(Filters.regex('^Получить данные по пациенту$'),
-                               PatronageJob.send_user_file),
+                               DoctorJob.send_user_file),
                 MessageHandler(
                     Filters.regex('^Получить данные по всем пользователям$'),
-                    PatronageJob.send_users_data),
+                    DoctorJob.send_users_data),
                 MessageHandler(Filters.regex('^Получить список пациентов$'),
-                               PatronageJob.send_patients_list),
+                               DoctorJob.send_patients_list),
                 MessageHandler(Filters.regex('^Исключить пациента из'
                                              ' исследования$'),
-                               PatronageJob.exclude_patient_state),
+                               DoctorJob.exclude_patient_state),
                 CallbackQueryHandler(self.alarm_send_p_data,
                                      pattern='^A_PATIENT_DATA')
             ],
@@ -64,7 +64,7 @@ class PatronageJob(ConversationHandler):
             pass
 
     @staticmethod
-    @registered_patronages
+    @registered_doctors
     def send_user_file(update: Update, context: CallbackContext):
         text = 'Введите код пациента'
         try:
@@ -74,7 +74,7 @@ class PatronageJob(ConversationHandler):
             return END
 
     @staticmethod
-    @registered_patronages
+    @registered_doctors
     def exclude_patient_state(update: Update, context: CallbackContext):
         text = 'Введите код пациента'
         try:
@@ -84,7 +84,7 @@ class PatronageJob(ConversationHandler):
             return END
 
     @staticmethod
-    @registered_patronages
+    @registered_doctors
     def send_user_data(update: Update, context: CallbackContext):
         user_code = update.message.text
         if patient_exists_by_user_code(user_code):
@@ -109,7 +109,7 @@ class PatronageJob(ConversationHandler):
         return END
 
     @staticmethod
-    @registered_patronages
+    @registered_doctors
     def exclude_patient(update: Update, context: CallbackContext):
         user_code = update.message.text
         patient = get_patient_by_user_code(user_code)
@@ -133,7 +133,7 @@ class PatronageJob(ConversationHandler):
         return END
 
     @staticmethod
-    @registered_patronages
+    @registered_doctors
     def alarm_send_p_data(update: Update, context: CallbackContext):
         data = update.callback_query.data
         user_code = data[data.find('&') + 1:]
@@ -147,7 +147,7 @@ class PatronageJob(ConversationHandler):
             pass
 
     @staticmethod
-    @registered_patronages
+    @registered_doctors
     def send_users_data(update: Update, context: CallbackContext):
         make_file_patients()
         try:
@@ -166,7 +166,7 @@ class PatronageJob(ConversationHandler):
         return END
 
     @staticmethod
-    @registered_patronages
+    @registered_doctors
     def send_patients_list(update: Update, context: CallbackContext):
         make_patient_list()
         try:

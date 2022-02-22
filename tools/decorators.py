@@ -43,17 +43,17 @@ def just_for_registered_msg(update: Update):
         pass
 
 
-def registered_patronages(func):
+def registered_doctors(func):
     def decorator(update: Update, context: CallbackContext, *args, **kwargs):
-        from modules.users_classes import PatronageUser
+        from modules.users_classes import DoctorUser
         user = context.user_data.get('user')
-        if type(user) is PatronageUser and user.registered():
+        if type(user) is DoctorUser and user.registered():
             return func(update, context, *args, **kwargs)
-        return just_for_patronage(update)
+        return just_for_doctor(update)
     return decorator
 
 
-def just_for_patronage(update: Update):
+def just_for_doctor(update: Update):
     try:
         update.effective_chat.send_message(
             'Это возможность предусмотрена только для специальных сотрудников')

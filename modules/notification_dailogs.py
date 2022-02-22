@@ -78,7 +78,7 @@ class PillTakingDialog(ConversationHandler):
         user = data['user']
 
         text = 'Доброе утро! Примите, пожалуйста, лекарство!\n' \
-               'Нажмите "Добавить ответ", чтобы мы могли зафиксировать ваши ' \
+               'Нажмите "Добавить ответ", чтобы мы могли зафиксировать ваши '\
                'действия.' if not text else text
 
         buttons = [[InlineKeyboardButton(
@@ -109,7 +109,7 @@ class PillTakingDialog(ConversationHandler):
 
         if not response:
             text = 'Доброе утро! Примите, пожалуйста, лекарство!\n\n' \
-                   'Если вы приняли лекарство, нажмите "Я принял лекарство".' \
+                   'Если вы приняли лекарство, нажмите "Я принял лекарство".'\
                    '\n\nЕсли у Вас нет возможности принять лекарство, ' \
                    'нажмите "Я не могу принять" и опишите свою причину.'
         else:
@@ -212,7 +212,8 @@ class DataCollectionDialog(ConversationHandler):
                 DATA_COLLECT_ACTION: [
                     CallbackQueryHandler(self.input_req,
                                          pattern=f'^SYS$|^DIAS$|^HEART$'),
-                    CallbackQueryHandler(self.end, pattern=f'END_DATA_COLLECT')
+                    CallbackQueryHandler(self.end,
+                                         pattern=f'END_DATA_COLLECT')
                 ],
                 TYPING: [
                     MessageHandler(Filters.text & ~Filters.command,
@@ -228,7 +229,8 @@ class DataCollectionDialog(ConversationHandler):
     def pre_start(context: CallbackContext, data):
         """Предстартовое сообщение с кнопкой для запуска диалога"""
         state_name = data['user'].state()[0]
-        text = 'Добрый вечер! ' if not state_name == 'MOR' else 'Доброе утро! '
+        text = 'Добрый вечер! ' if not state_name == 'MOR'\
+            else 'Доброе утро! '
 
         text += 'Сообщите, пожалуйста, ' \
                 'ваше артериальное давление!\n' \

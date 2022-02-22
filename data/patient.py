@@ -1,6 +1,5 @@
 import sqlalchemy
 from sqlalchemy import orm
-
 from .db_session import SqlAlchemyBase
 
 
@@ -17,9 +16,7 @@ class Patient(SqlAlchemyBase):
     member = sqlalchemy.Column(sqlalchemy.Boolean, default=True)
     accept_time = orm.relation('AcceptTime', back_populates='patient',
                                passive_deletes='all')
-    patronage = orm.relationship("Patronage",
-                                 secondary="patients_has_patronage",
-                                 back_populates="patient")
+    doctor = orm.relationship('Doctor')
 
     def __repr__(self):
         return f'''Patient: {self.id, self.name, self.user_code, self.chat_id,
