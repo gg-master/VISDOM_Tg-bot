@@ -3,11 +3,13 @@ from telegram import (InlineKeyboardButton, InlineKeyboardMarkup,
 from telegram.ext import (CallbackContext, CallbackQueryHandler,
                           CommandHandler, Filters, MessageHandler)
 
-from db_api import get_all_doctors, get_doctor_by_chat_id
+from db_api import get_all_doctors, get_doctor_by_chat_id,\
+    get_region_by_chat_id
 from modules.dialogs_shortcuts.start_shortcuts import *
 from modules.doctor_dialogs import DoctorJob
 from modules.restore import Restore
-from modules.users_classes import BasicUser, PatientUser, DoctorUser
+from modules.users_classes import BasicUser, PatientUser, DoctorUser,\
+    RegionUser
 from tools.decorators import not_registered_users
 from tools.prepared_answers import START_MSG
 from tools.tools import get_from_env
@@ -43,7 +45,8 @@ class StartDialog(ConversationHandler):
     @user_separation
     def start(update: Update, context: CallbackContext):
         if not context.user_data.get('user'):
-            context.user_data['user'] = BasicUser()
+            context.user_data['user'] = BasicUser(chat_id=
+                                                  update.effective_chat.id)
 
         buttons = [
             [InlineKeyboardButton(text='Зарегистрироваться',
@@ -495,8 +498,8 @@ class DoctorRegistrationDialog(ConversationHandler):
         super().__init__(
             name=self.__class__.__name__,
             entry_points=[CallbackQueryHandler(
-                self.pre_start, pattern=f'^{SIGN_UP_AS_PATRONAGE}$'),
-                CommandHandler('reg_patronage', self.pre_start)],
+                self.pre_start, pattern=f'^{SIGN_UP_AS_DOCTOR}$'),
+                CommandHandler('reg_doctor', self.pre_start)],
             states={
                 TYPING_TOKEN: [
                     MessageHandler(Filters.text & ~Filters.command,
@@ -554,6 +557,76 @@ class DoctorRegistrationDialog(ConversationHandler):
             #     text='Начать работу', callback_data=DEFAULT_JOB)]])
             update.effective_chat.send_message('Вы успешно зарегестрированы!')
             DoctorJob.default_job(update, context)
+            return END
+
+        update.message.reply_text('Неверный токен.\nПопробуйте снова.')
+        return TYPING_TOKEN
+
+
+class RegionRegistrationDialog(ConversationHandler):
+    def __init__(self):
+        super().__init__(
+            name=self.__class__.__name__,
+            entry_points=[CallbackQueryHandler(
+                self.pre_start, pattern=f'^{SIGH_UP_AS_REGION}$',
+                run_async=False)],
+            states={
+                TYPING_TOKEN: [
+                    MessageHandler(Filters.text & ~Filters.command,
+                                   self.get_token, run_async=False)]
+            },
+            fallbacks=[
+                CommandHandler('stop', StartDialog.stop_nested,
+                               run_async=False),
+                CallbackQueryHandler(PatientRegistrationDialog.back_to_start,
+                                     pattern=f'^{END}$'),
+                CommandHandler('start', StartDialog.restart, run_async=False)
+            ],
+            map_to_parent={
+                START_SELECTORS: START_SELECTORS,
+                STOPPING: END,
+                END: END
+            }
+        )
+
+    @staticmethod
+    @not_registered_users
+    def pre_start(update: Update, context: CallbackContext):
+        if get_region_by_chat_id(update.effective_chat.id):
+            text = 'Вы не можете повторно зарегистрироваться.\n'
+            update.effective_chat.send_message(text)
+            Restore.restore_region_msg(
+                context, chat_id=update.effective_chat.id)
+            return END
+        return RegionRegistrationDialog.start(update, context)
+
+
+    @staticmethod
+    def start(update: Update, context: CallbackContext):
+        text = f'Введите токен для регистрации сотрудника.'
+
+        context.bot.delete_message(update.message.chat_id,
+                                   context.chat_data['st_msg'])
+        msg = update.message.reply_text(text=text)
+        context.chat_data['st_msg'] = msg.message_id
+
+        return TYPING_TOKEN
+
+    @staticmethod
+    def get_token(update: Update, context: CallbackContext):
+        token = update.message.text
+        # other_doctors = get_all_doctors()
+        # if other_doctors:
+        #     update.effective_chat.send_message(
+        #         'Вы не можете зарегистрироваться как сотрудник.')
+        #     return END
+        if token == get_from_env('REGION_TOKEN'):
+            context.user_data['user'] = RegionUser(update.effective_chat.id)
+            context.user_data['user'].register(update, context)
+            # keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(
+            #     text='Начать работу', callback_data=DEFAULT_JOB)]])
+            update.effective_chat.send_message('Вы успешно зарегестрированы!')
+            # RegionJob.default_job(update, context)
             return END
 
         update.message.reply_text('Неверный токен.\nПопробуйте снова.')

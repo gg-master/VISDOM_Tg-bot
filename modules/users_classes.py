@@ -435,3 +435,7 @@ class DoctorUser(BasicUser):
                                          reply_markup=kb)
             except error.Unauthorized:
                 pass
+
+
+class RegionUser(BasicUser):
+    pass

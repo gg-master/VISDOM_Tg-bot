@@ -7,8 +7,9 @@ END = ConversationHandler.END
     # State definitions for top level conversation
     START_SELECTORS,
     # Constants
-    SIGN_UP_AS_PATIENT, SIGN_UP_AS_PATRONAGE
-) = map(chr, range(3))
+    SIGN_UP_AS_PATIENT, SIGN_UP_AS_DOCTOR, SIGH_UP_AS_REGION,
+    SIGN_UP_AS_UNIVERSITY
+) = map(chr, range(5))
 
 (
     # State definitions for patient registration conversation
@@ -18,7 +19,7 @@ END = ConversationHandler.END
     CONF_NOTIFICATIONS,
     CONF_CODE,
     CONF_TZ,
-) = map(chr, range(3, 8))
+) = map(chr, range(5, 10))
 
 (
     # States for Time Zone settings
@@ -26,13 +27,13 @@ END = ConversationHandler.END
     TYPING_TZ,
     # Constants
     CONF_LOCATION
-) = map(chr, range(8, 11))
+) = map(chr, range(10, 13))
 
 (
     # States for Notification settings
     CONF_NOTIF_ACTIONS,
     TIME_CHANGE,
-) = map(chr, range(11, 13))
+) = map(chr, range(13, 15))
 
 (
     # Other states
@@ -41,7 +42,7 @@ END = ConversationHandler.END
     # Other constants
     START_OVER,
     FINISH_REGISTRATION,
-) = map(chr, range(13, 17))
+) = map(chr, range(15, 19))
 
 
 (
@@ -49,4 +50,4 @@ END = ConversationHandler.END
     TYPING_TOKEN,
     SEND_USER_DATA_PAT,
     EXCLUDE_PATIENT
-) = map(chr, range(17, 21))
+) = map(chr, range(19, 23))

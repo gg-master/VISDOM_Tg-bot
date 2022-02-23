@@ -9,6 +9,9 @@ from data.accept_time import AcceptTime
 from data.patient import Patient
 from data.doctor import Doctor
 from data.record import Record
+from data.region import Region
+from data.university import University
+from sqlalchemy import func
 
 db_session.global_init()
 
@@ -19,18 +22,71 @@ def create_session():
     db_sess.close()
 
 
-def get_accept_times_by_patient_id(p_id: int):
-    with db_session.create_session() as db_sess:
-        return db_sess.query(AcceptTime).filter(
-            AcceptTime.patient_id == p_id).all()
+"""University functions"""
 
 
-def add_accept_time(time, patient: Patient) -> int:
+def add_university(**kwargs: Any) -> None:
     with db_session.create_session() as db_sess:
-        accept_time = AcceptTime(time=time, patient=patient)
-        db_sess.add(accept_time)
+        university = University(**kwargs)
+        db_sess.add(university)
         db_sess.commit()
-        return accept_time.id
+
+
+def get_university_by_chat_id(chat_id: int) -> University:
+    with db_session.create_session() as db_sess:
+        return db_sess.query(University).filter(
+            University.chat_id == chat_id).first()
+
+
+def get_university_by_id(id: int) -> University:
+    with db_session.create_session() as db_sess:
+        return db_sess.query(University).filter(
+            University.id == id).first()
+
+
+"""Region functions"""
+
+
+def add_region(**kwargs: Any) -> None:
+    with db_session.create_session() as db_sess:
+        region = Region(**kwargs)
+        db_sess.add(region)
+        db_sess.commit()
+
+
+def get_region_by_id(id: int) -> Region:
+    with db_session.create_session() as db_sess:
+        return db_sess.query(Region).filter(
+            Region.id == id).first()
+
+
+def get_region_by_chat_id(chat_id: int) -> Region:
+    with db_session.create_session() as db_sess:
+        return db_sess.query(Region).filter(
+            Region.chat_id == chat_id).first()
+
+
+"""Doctor functions"""
+
+
+def add_doctor(**kwargs: Any) -> None:
+    with db_session.create_session() as db_sess:
+        doctor = Doctor(**kwargs)
+        db_sess.add(doctor)
+        db_sess.commit()
+
+
+def get_all_doctors():
+    with db_session.create_session() as db_sess:
+        return db_sess.query(Doctor).all()
+
+
+def get_doctor_by_chat_id(chat_id: int) -> Doctor:
+    with db_session.create_session() as db_sess:
+        return db_sess.query(Doctor).filter(Doctor.chat_id == chat_id).first()
+
+
+"""Patient functions"""
 
 
 def add_patient(time_morn, time_even, **kwargs: Any):
@@ -54,9 +110,27 @@ def get_patient_by_user_code(user_code: str) -> Patient:
             Patient.user_code == user_code).first()
 
 
+def get_all_patients_by_doctor_id(id: int) -> list:
+    with db_session.create_session() as db_sess:
+        return db_sess.query(Patient).filter(Patient.doctor_id == id).all()
+
+
 def get_all_patients() -> list:
     with db_session.create_session() as db_sess:
         return db_sess.query(Patient).all()
+
+
+def get_all_patients_v2():
+    dct = {}
+    with db_session.create_session() as db_sess:
+        patients = db_sess.query(Patient, AcceptTime.time).join(
+            AcceptTime).group_by(Patient.id, AcceptTime.time).all()
+        for patient in patients:
+            if patient[0] not in dict:
+                dct[patient[0]] = [patient[1]]
+            else:
+                dct[patient[0]].append(patient[1])
+        print(list(dct.items()))
 
 
 def del_patient(p_id):
@@ -78,13 +152,10 @@ def change_patients_time_zone(chat_id: int, time_zone: int) -> None:
         db_sess.commit()
 
 
-def change_accept_time(accept_time_id, time):
+def patient_exists_by_user_code(user_code):
     with db_session.create_session() as db_sess:
-        accept_time = db_sess.query(AcceptTime).filter(AcceptTime.id ==
-                                                       accept_time_id).first()
-        accept_time.time = time
-        db_sess.add(accept_time)
-        db_sess.commit()
+        return db_sess.query(db_sess.query(Patient).filter(
+            Patient.user_code == user_code).exists()).scalar()
 
 
 def change_patients_membership(user_code: str, member: bool) -> None:
@@ -95,56 +166,9 @@ def change_patients_membership(user_code: str, member: bool) -> None:
         db_sess.commit()
 
 
-def patient_exists_by_user_code(user_code):
-    with db_session.create_session() as db_sess:
-        return db_sess.query(db_sess.query(Patient).filter(
-            Patient.user_code == user_code).exists()).scalar()
-
-
-def add_doctor(**kwargs: Any) -> None:
-    with db_session.create_session() as db_sess:
-        doctor = Doctor(**kwargs)
-        db_sess.add(doctor)
-        db_sess.commit()
-
-
-def get_all_doctors():
-    with db_session.create_session() as db_sess:
-        return db_sess.query(Doctor).all()
-
-
-def get_doctor_by_chat_id(chat_id: int) -> Doctor:
-    with db_session.create_session() as db_sess:
-        return db_sess.query(Doctor).filter(Doctor.chat_id
-                                            == chat_id).first()
-
-
-def add_record(**kwargs: Any) -> None:
-    with db_session.create_session() as db_sess:
-        record = Record(**kwargs)
-        db_sess.add(record)
-        db_sess.commit()
-
-
-def get_last_record_by_accept_time(accept_time_id):
-    with db_session.create_session() as db_sess:
-        records = db_sess.query(Record).filter(
-            Record.accept_time_id == accept_time_id,
-            Record.sys_press != None).all()
-        return records
-
-
-def get_all_records_by_accept_time(accept_time_id):
-    with db_session.create_session() as db_sess:
-        records = db_sess.query(Record).filter(
-            Record.accept_time_id == accept_time_id).all()
-        return records
-
-
 def make_file_by_patient_user_code(user_code):
     if not os.path.isdir("static"):
         os.mkdir("static")
-
     with db_session.create_session() as db_sess:
         records = db_sess.execute(f"""SELECT record.sys_press,
                   record.dias_press, record.heart_rate, record.time,
@@ -172,7 +196,6 @@ def make_file_by_patient_user_code(user_code):
 def make_file_patients():
     if not os.path.isdir("static"):
         os.mkdir("static")
-
     with db_session.create_session() as db_sess:
         records = db_sess.execute('SELECT patient.id, patient.user_code,'
                                   ' record.sys_press, record.dias_press,'
@@ -205,23 +228,9 @@ def make_file_patients():
     # wb.save(filename='static/statistics.xlsx')
 
 
-def get_all_patients_v2():
-    dct = {}
-    with db_session.create_session() as db_sess:
-        patients = db_sess.query(Patient, AcceptTime.time).join(
-            AcceptTime).group_by(Patient.id, AcceptTime.time).all()
-        for patient in patients:
-            if patient[0] not in dict:
-                dct[patient[0]] = [patient[1]]
-            else:
-                dct[patient[0]].append(patient[1])
-        print(list(dct.items()))
-
-
 def make_patient_list():
     if not os.path.isdir("static"):
         os.mkdir("static")
-
     with db_session.create_session() as db_sess:
         patients_user_codes = db_sess.query(Patient.user_code,
                                             Patient.member).all()
@@ -232,3 +241,61 @@ def make_patient_list():
         if not patients_user_codes[i][1]:
             cell.fill = styles.PatternFill('solid', fgColor='FF0000')
     wb.save(filename=f'static/Список пациентов.xlsx')
+
+
+"""Accept time functions"""
+
+
+def add_accept_time(time, patient: Patient) -> int:
+    with db_session.create_session() as db_sess:
+        accept_time = AcceptTime(time=time, patient=patient)
+        db_sess.add(accept_time)
+        db_sess.commit()
+        return accept_time.id
+
+
+def get_accept_times_by_patient_id(p_id: int):
+    with db_session.create_session() as db_sess:
+        return db_sess.query(AcceptTime).filter(AcceptTime.patient_id ==
+                                                p_id).all()
+
+
+def change_accept_time(accept_time_id, time):
+    with db_session.create_session() as db_sess:
+        accept_time = db_sess.query(AcceptTime).filter(AcceptTime.id ==
+                                                       accept_time_id).first()
+        accept_time.time = time
+        db_sess.add(accept_time)
+        db_sess.commit()
+
+
+"""Record functions"""
+
+
+def add_record(**kwargs: Any) -> None:
+    with db_session.create_session() as db_sess:
+        record = Record(**kwargs)
+        db_sess.add(record)
+        db_sess.commit()
+
+
+def get_last_record_by_accept_time(accept_time_id):
+    with db_session.create_session() as db_sess:
+        # max_time = db_sess.query(func.max(Record.response_time)).filter(
+        #     Record.accept_time_id == accept_time_id and
+        #     Record.sys_press.isnot(None))
+        # record = db_sess.query(Record).filter(
+        #     Record.response_time == max_time and
+        #     Record.accept_time_id == accept_time_id).first()
+        # return record
+        records = db_sess.query(Record).filter(
+            Record.accept_time_id == accept_time_id,
+            Record.sys_press != None).all()
+        return records
+
+
+def get_all_records_by_accept_time(accept_time_id):
+    with db_session.create_session() as db_sess:
+        records = db_sess.query(Record).filter(
+            Record.accept_time_id == accept_time_id).all()
+        return records

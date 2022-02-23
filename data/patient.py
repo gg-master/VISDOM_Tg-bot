@@ -16,6 +16,9 @@ class Patient(SqlAlchemyBase):
     member = sqlalchemy.Column(sqlalchemy.Boolean, default=True)
     accept_time = orm.relation('AcceptTime', back_populates='patient',
                                passive_deletes='all')
+    doctor_id = sqlalchemy.Column(sqlalchemy.Integer,
+                                  sqlalchemy.ForeignKey('doctor.id',
+                                                        ondelete='CASCADE'))
     doctor = orm.relationship('Doctor')
 
     def __repr__(self):

@@ -84,6 +84,10 @@ class Restore:
             logging.warning(f"CANT SEND RESTORE_MSG TO DOCTOR. "
                             f"CHAT NOT FOUND. \nMORE: {e}")
 
+    @staticmethod
+    def restore_region_msg(context, **kwargs):
+        pass
+
 
 @not_registered_users
 def patient_restore_handler(update: Update, context: CallbackContext):
