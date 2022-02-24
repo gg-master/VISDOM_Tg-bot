@@ -14,7 +14,8 @@ from db_api import (add_patient, add_doctor, add_record, change_accept_time,
                     get_last_record_by_accept_time, get_patient_by_chat_id,
                     get_doctor_by_chat_id, get_all_records_by_accept_time,
                     get_patient_by_user_code, get_doctor_by_code,
-                    get_region_by_code, get_all_patient_by_user_code)
+                    get_region_by_code, get_all_patient_by_user_code,
+                    add_region)
 from modules.location import Location
 from modules.notification_dailogs import DataCollectionDialog, PillTakingDialog
 from modules.patient_list import patient_list
@@ -434,6 +435,18 @@ class DoctorUser(BasicUser):
 
 
 class RegionUser(BasicUser):
+    def register(self, update: Update, context: CallbackContext):
+        super().register()
+        logging.info(f'REGISTER NEW REGION: {update.effective_user.id}')
+        Thread(target=self._threading_reg).start()
+
+    def restore(self):
+        super().register()
+
+    def _threading_reg(self):
+        # TODO добавить необходимые параметры при регистрации
+        add_region(chat_id=self.chat_id)
+
     @classmethod
     def send_alarm(cls, context, **kwargs):
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -457,3 +470,6 @@ class RegionUser(BasicUser):
             except error.Unauthorized:
                 pass
 
+
+class Uni(BasicUser):
+    pass

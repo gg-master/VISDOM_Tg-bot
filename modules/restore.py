@@ -20,6 +20,8 @@ class Restore:
         # Восстановление патронажа
         self.restore_doctor(self.context)
 
+        # TODO восстановление других ролей
+
     def restore_all_patients(self):
         for patient in filter(lambda x: x.member, get_all_patients()):
             accept_times = get_accept_times_by_patient_id(patient.id)
