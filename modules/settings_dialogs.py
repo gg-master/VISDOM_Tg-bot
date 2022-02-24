@@ -26,8 +26,7 @@ class SettingsDialog(ConversationHandler):
                 SETTINGS_ACTION: [
                     SettingsConfTZDialog(),
                     SettingsConfNotifTimeDialog(),
-                    CallbackQueryHandler(self.confirm,
-                                         pattern=f'^{CONFIRM}$'),
+                    CallbackQueryHandler(self.confirm, pattern=f'^{CONFIRM}$'),
                     CallbackQueryHandler(self.drop_notif_time,
                                          pattern=f'^{DROP_NOTIF_TIME}$')
                 ]
@@ -188,8 +187,7 @@ class SettingsConfTZDialog(ConfigureTZDialog):
         from modules.location import ChangeLocationDialog
         super().__init__(ChangeLocationDialog,
                          ex_fallbacks=[
-                             CommandHandler('stop',
-                                            SettingsDialog.stop_nested,
+                             CommandHandler('stop', SettingsDialog.stop_nested,
                                             run_async=False),
                              MessageHandler(Filters.regex('Настройки$'),
                                             SettingsDialog.restart,
@@ -202,8 +200,7 @@ class SettingsConfTZDialog(ConfigureTZDialog):
 
     @staticmethod
     def save_tz(update: Update, context: CallbackContext, *args):
-        return ConfigureTZDialog.save_tz(update, context,
-                                         SettingsDialog.start)
+        return ConfigureTZDialog.save_tz(update, context, SettingsDialog.start)
 
     @staticmethod
     def back(update: Update, context: CallbackContext):

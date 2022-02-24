@@ -2,6 +2,7 @@ import logging
 import datetime as dt
 from typing import Dict, Optional
 
+import pytz
 from telegram import error
 from telegram.ext import CallbackContext
 
@@ -16,6 +17,53 @@ def remove_job_if_exists(name, context: CallbackContext):
         logging.info(f'REMOVED TASK: {name}')
         job.schedule_removal()
     return True
+
+
+def calc_start_time(now, first, interval):
+    f = dt.timedelta(hours=first.hour, minutes=first.minute)
+    n = dt.timedelta(hours=now.hour, minutes=now.minute)
+
+    return first + interval * (abs(f - n) // interval + 1)
+
+
+def restore_repeating_task(user, context: CallbackContext, **kwargs):
+    """Восстановление повторяющихся сообщений"""
+    state_name = user.state()[0]
+
+    # После регистрации первое утреннее уведомление придет на след. день
+    from db_api import get_all_records_by_accept_time
+    if user.check_last_record_by_name(state_name)[0] or \
+            (state_name == 'MOR' and (
+                    kwargs.get('register') or
+                    (not get_all_records_by_accept_time(
+                        user.accept_times['EVE']) and
+                     not get_all_records_by_accept_time(
+                         user.accept_times['MOR'])))):
+        return None
+
+    # Проверяем время в которое произошел рестарт.
+    # Если рестар был между лимитами определенного уведомления, то
+    # восстанавливаем репитер, чтобы отправить уведомление
+    now = dt.datetime.now(tz=user.tz).time()
+    first = user.tz.localize(user.time_limiters[state_name][0])
+    last = user.tz.localize(user.time_limiters[state_name][1])
+
+    if now < user.tz.localize(user.times[state_name]).time() or \
+            now > last.time():
+        return None
+
+    interval = dt.timedelta(hours=1) if state_name == 'MOR' \
+        else dt.timedelta(minutes=30)
+
+    remove_job_if_exists(f'{user.chat_id}-rep_task', context)
+    context.job_queue.run_repeating(
+        callback=repeating_task,
+        interval=interval,
+        first=calc_start_time(now, first, interval),
+        last=last.astimezone(pytz.utc).time(),
+        context={'user': user, 'name': state_name},
+        name=f'{user.chat_id}-rep_task'
+    )
 
 
 def create_daily_notification(context: CallbackContext, **kwargs):
@@ -58,7 +106,6 @@ def daily_task(context: CallbackContext):
 
     # Если пользователь не ответил на предыдущее сообщение (уведомление),
     # то удаляем его
-    # TODO фикс бага при удалении сообщения
     if user.msg_to_del:
         try:
             context.bot.delete_message(user.chat_id,

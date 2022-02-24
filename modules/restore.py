@@ -64,7 +64,14 @@ class Restore:
         buttons = [[InlineKeyboardButton(text='Восстановить доступ',
                                          callback_data=f'RESTORE_PATIENT')]]
         kb = InlineKeyboardMarkup(buttons)
-        context.bot.send_message(kwargs['chat_id'], text=text, reply_markup=kb)
+        try:
+            context.bot.send_message(kwargs['chat_id'], text=text,
+                                     reply_markup=kb)
+        except error.Unauthorized:
+            for task in (f'{kwargs["chat_id"]}-MOR',
+                         f'{kwargs["chat_id"]}-EVE',
+                         f'{kwargs["chat_id"]}-rep_task'):
+                remove_job_if_exists(task, context)
 
     @staticmethod
     def restore_doctor_msg(context, **kwargs):
@@ -80,9 +87,11 @@ class Restore:
         try:
             context.bot.send_message(
                 kwargs['chat_id'], text=text, reply_markup=keyboard)
+        except error.Unauthorized:
+            pass
         except Exception as e:
-            logging.warning(f"CANT SEND RESTORE_MSG TO DOCTOR. "
-                            f"CHAT NOT FOUND. \nMORE: {e}")
+            logging.warning(f'CANT SEND RESTORE_MSG TO DOCTOR. '
+                            f'CHAT NOT FOUND. \nMORE: {e}')
 
     @staticmethod
     def restore_region_msg(context, **kwargs):
@@ -104,23 +113,33 @@ def patient_restore_handler(update: Update, context: CallbackContext):
         try:
             context.bot.delete_message(user.chat_id,
                                        user.msg_to_del.message_id)
-        except Exception as e:
+        except error.TelegramError:
             pass
 
     # Удаляем сообщени с кнопкой восстановления
     update.callback_query.delete_message()
-    update.effective_chat.send_message(
-        'Доступ восстановлен. Теперь Вы можете добавить ответ на уведомления, '
-        'к которым не было доступа.')
-    PatientRegistrationDialog.restore_main_msg(update, context)
-
-    # Если уже пришло уведомление, то переотправляем его после восстановления
-    if user.msg_to_del:
-        # Снова отображаем удаленное уведомление
-        user.notification_states[user.state()[0]][
-            user.state()[1]].pre_start(
-            context, context.job_queue.get_jobs_by_name(
-                f'{user.chat_id}-rep_task')[0].context)
+    try:
+        update.effective_chat.send_message(
+            'Доступ восстановлен. Теперь Вы можете добавить ответ на '
+            'уведомления, к которым не было доступа.')
+        PatientRegistrationDialog.restore_main_msg(update, context)
+        # print(context.job_queue.get_jobs_by_name(
+        #     f'{context.user_data["user"].chat_id}-EVE')[0].next_t)
+        # print(context.job_queue.get_jobs_by_name(
+        #     f'{context.user_data["user"].chat_id}-rep_task')[0].next_t)
+        # Если уже пришло уведомление, то переотправляем его
+        if user.msg_to_del:
+            try:
+                context.bot.delete_message(user.chat_id,
+                                           user.msg_to_del.message_id)
+            except error.TelegramError:
+                pass
+            # Снова отображаем удаленное уведомление
+            user.notification_states[user.state()[0]][
+                user.state()[1]].pre_start(
+                context, data={'user': user})
+    except error.Unauthorized:
+        pass
 
 
 @not_registered_users
@@ -129,12 +148,14 @@ def doctor_restore_handler(update: Update, context: CallbackContext):
     from modules.doctor_dialogs import DoctorJob
 
     p = context.user_data['user'] = DoctorUser(update.effective_chat.id)
-    p.restore(context)
+    p.restore()
     logging.info(f'RESTORED DOCTOR: {p.chat_id}')
     try:
         update.callback_query.delete_message()
         update.effective_chat.send_message('Доступ восстановлен.')
         DoctorJob.default_job(update, context)
+    except error.Unauthorized:
+        pass
     except Exception as e:
         logging.warning(f"CANT SEND RESTORE_MSG TO PATIENT. CHAT NOT FOUND."
                         f"\nMORE: {e}")

@@ -12,12 +12,15 @@ from data import db_session
 from db_api import (add_patient, add_doctor, add_record, change_accept_time,
                     change_patients_time_zone, get_all_doctors,
                     get_last_record_by_accept_time, get_patient_by_chat_id,
-                    get_doctor_by_chat_id, get_all_records_by_accept_time)
+                    get_doctor_by_chat_id, get_all_records_by_accept_time,
+                    get_patient_by_user_code, get_doctor_by_code,
+                    get_region_by_code)
 from modules.location import Location
 from modules.notification_dailogs import DataCollectionDialog, PillTakingDialog
 from modules.patient_list import patient_list
 from modules.timer import (create_daily_notification, remove_job_if_exists,
-                           repeating_task)
+                           restore_repeating_task)
+from tools.exceptions import DoctorNotFound, PatientExists, RegionNotFound
 from tools.tools import convert_tz
 
 db_session.global_init()
@@ -77,7 +80,7 @@ class PatientUser(BasicUser):
 
     def __init__(self, chat_id: int):
         super().__init__(chat_id)
-        self.code = None
+        self.code = self.doctor = None
 
         self.location = self.tz = self.accept_times = None
         self.times = self.default_times.copy()
@@ -96,6 +99,33 @@ class PatientUser(BasicUser):
         # Ответы от пользователя на уведомления
         self.pill_response = None
         self.data_response = {'sys': None, 'dias': None, 'heart': None}
+
+    def set_code(self, code):
+        # Код не подходит по патерну, то вызываем ошибку
+        if not re.match(r'^\d{2,}[a-zA-Zа-яА-ЯёЁ]{3}'
+                        r'\d*[a-zA-Zа-яА-ЯёЁ]{3}\d*$', code):
+            raise ValueError()
+        self.code = code
+
+    def validate_code(self):
+        patients = get_patient_by_user_code(self.code)
+        if patients:
+            self.code += str(int('0' + re.findall(r'^\d{2,}[a-zA-Zа-яА-ЯёЁ]{3}'
+                                                  r'\d*[a-zA-Zа-яА-ЯёЁ]{3}\d*$'
+                                                  , patients[-1].code)[0]))
+            print(self.code)
+
+        # Из user_code вытаскиваем код врача
+        doc = get_doctor_by_code(re.findall(r'^\d{2,}([a-zA-Zа-яА-ЯёЁ]{3}\d*)'
+                                            r'[a-zA-Zа-яА-ЯёЁ]{3}\d*$',
+                                            self.code)[0])
+        if not doc:
+            raise DoctorNotFound(f'Ваш доктор не найден. Проверьте Ваш код.')
+        if not get_region_by_code(
+            re.findall(r'^(\d{2,})[a-zA-Zа-яА-ЯёЁ]{3}\d*'
+                       r'[a-zA-Zа-яА-ЯёЁ]{3}\d*$', self.code)[0]):
+            raise RegionNotFound('Ваш регион не найден. Проверьте Ваш код.')
+        self.doctor = doc
 
     def change_membership(self, context: CallbackContext):
         self.is_registered = False
@@ -157,52 +187,12 @@ class PatientUser(BasicUser):
             )
 
     def recreate_notification(self, context: CallbackContext, **kwargs):
-        self.create_notification(context, **kwargs)
-
-    @staticmethod
-    def calc_start_time(now, first, interval):
-        f = dt.timedelta(hours=first.hour, minutes=first.minute)
-        n = dt.timedelta(hours=now.hour, minutes=now.minute)
-
-        return first + interval * (abs(f - n) // interval + 1)
+        Thread(target=self.create_notification,
+               args=(context,), kwargs=kwargs).start()
 
     def restore_repeating_task(self, context: CallbackContext, **kwargs):
-        """Восстановление повторяющихся сообщений"""
-        state_name = self.state()[0]
-
-        # После регистрации первое утреннее уведомление придет на след. день
-        if self.check_last_record_by_name(state_name)[0] or \
-                (state_name == 'MOR' and (
-                        kwargs.get('register') or
-                        (not get_all_records_by_accept_time(
-                            self.accept_times['EVE']) and
-                         not get_all_records_by_accept_time(
-                                    self.accept_times['MOR'])))):
-            return None
-
-        # Проверяем время в которое произошел рестарт.
-        # Если рестар был между лимитами определенного уведомления, то
-        # восстанавливаем репитер, чтобы отправить уведомление
-        now = dt.datetime.now(tz=self.tz).time()
-        first = self.tz.localize(self.time_limiters[state_name][0])
-        last = self.tz.localize(self.time_limiters[state_name][1])
-
-        if now < self.tz.localize(self.times[state_name]).time() or \
-                now > last.time():
-            return None
-
-        interval = dt.timedelta(hours=1) if state_name == 'MOR' \
-            else dt.timedelta(minutes=30)
-
-        remove_job_if_exists(f'{self.chat_id}-rep_task', context)
-        context.job_queue.run_repeating(
-            callback=repeating_task,
-            interval=interval,
-            first=PatientUser.calc_start_time(now, first, interval),
-            last=last.astimezone(pytz.utc).time(),
-            context={'user': self, 'name': state_name},
-            name=f'{self.chat_id}-rep_task'
-        )
+        Thread(target=restore_repeating_task,
+               args=(self, context), kwargs=kwargs).start()
 
     def state(self):
         """Возвращает имя временного таймера и состояние
@@ -229,10 +219,6 @@ class PatientUser(BasicUser):
     def clear_responses(self):
         self.pill_response = None
         self.data_response = {'sys': None, 'dias': None, 'heart': None}
-
-    def is_msg_updated(self):
-        return self.active_dialog_msg and \
-               self.msg_to_del != self.active_dialog_msg
 
     def drop_notif_time(self):
         """Сброс времени уведомлений до дефолтных"""
@@ -310,6 +296,7 @@ class PatientUser(BasicUser):
         Thread(target=self._threading_enable, args=(context,)).start()
 
     def _threading_enable(self, context: CallbackContext):
+        """Восстанавливаем пользователя, если он отключал бота"""
         if not context.job_queue.get_jobs_by_name(f'{self.chat_id}-MOR'):
             self.recreate_notification(context)
         if not context.job_queue.get_jobs_by_name(f'{self.chat_id}-rep_task'):
@@ -339,7 +326,8 @@ class PatientUser(BasicUser):
             name=update.effective_user.full_name,
             user_code=self.code,
             time_zone=self.tz.zone,
-            chat_id=self.chat_id
+            chat_id=self.chat_id,
+            doctor_id=self.doctor.id
         )
         self.save_updating(context, check_user=False)
 

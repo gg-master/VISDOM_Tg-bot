@@ -60,6 +60,12 @@ def get_region_by_id(id: int) -> Region:
             Region.id == id).first()
 
 
+def get_region_by_code(code: str) -> Region:
+    with db_session.create_session() as db_sess:
+        return db_sess.query(Region).filter(
+            Region.region_code == code).first()
+
+
 def get_region_by_chat_id(chat_id: int) -> Region:
     with db_session.create_session() as db_sess:
         return db_sess.query(Region).filter(
@@ -79,6 +85,12 @@ def add_doctor(**kwargs: Any) -> None:
 def get_all_doctors():
     with db_session.create_session() as db_sess:
         return db_sess.query(Doctor).all()
+
+
+def get_doctor_by_code(code: str) -> Doctor:
+    with db_session.create_session() as db_sess:
+        return db_sess.query(Doctor).filter(
+            Doctor.doctor_code == code).first()
 
 
 def get_doctor_by_chat_id(chat_id: int) -> Doctor:
@@ -102,6 +114,13 @@ def get_patient_by_chat_id(chat_id: int) -> Patient:
     with db_session.create_session() as db_sess:
         return db_sess.query(Patient).filter(
             Patient.chat_id == chat_id).first()
+
+
+def get_all_patient_by_user_code(user_code) -> list:
+    with db_session.create_session() as db_sess:
+        return sorted(db_sess.query(Patient).filter(
+            Patient.user_code.ilike(f'{user_code}%')).all(),
+                      key=lambda x: len(x.user_code))
 
 
 def get_patient_by_user_code(user_code: str) -> Patient:

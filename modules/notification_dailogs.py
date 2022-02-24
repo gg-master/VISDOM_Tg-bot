@@ -12,6 +12,11 @@ from tools.decorators import registered_patient
 
 class Notification:
     @staticmethod
+    def is_msg_updated(user):
+        return user.active_dialog_msg and \
+               user.msg_to_del != user.active_dialog_msg
+
+    @staticmethod
     def start(update: Update, context: CallbackContext, **kwargs):
         user = context.user_data['user']
         text, keyboard = kwargs['text'], kwargs['keyboard']
@@ -27,7 +32,7 @@ class Notification:
         else:
             # Если сообщения отличаются
             # (т.е. сообщение обновилось, то завершаем диалог)
-            if user.is_msg_updated():
+            if Notification.is_msg_updated(user):
                 user.active_dialog_msg = None
                 return END
 
@@ -193,7 +198,7 @@ class PillTakingDialog(ConversationHandler):
     def stop(update: Update, context: CallbackContext):
         user = context.user_data['user']
         # Если сообщение еще не обновилось
-        if not user.is_msg_updated():
+        if not Notification.is_msg_updated(user):
             # Если пользователь ввел команду /stop, диалог останавливается.
             context.bot.delete_message(update.effective_chat.id,
                                        user.msg_to_del.message_id)
@@ -212,8 +217,7 @@ class DataCollectionDialog(ConversationHandler):
                 DATA_COLLECT_ACTION: [
                     CallbackQueryHandler(self.input_req,
                                          pattern=f'^SYS$|^DIAS$|^HEART$'),
-                    CallbackQueryHandler(self.end,
-                                         pattern=f'END_DATA_COLLECT')
+                    CallbackQueryHandler(self.end, pattern=f'END_DATA_COLLECT')
                 ],
                 TYPING: [
                     MessageHandler(Filters.text & ~Filters.command,
@@ -229,8 +233,7 @@ class DataCollectionDialog(ConversationHandler):
     def pre_start(context: CallbackContext, data):
         """Предстартовое сообщение с кнопкой для запуска диалога"""
         state_name = data['user'].state()[0]
-        text = 'Добрый вечер! ' if not state_name == 'MOR'\
-            else 'Доброе утро! '
+        text = 'Добрый вечер! ' if not state_name == 'MOR' else 'Доброе утро! '
 
         text += 'Сообщите, пожалуйста, ' \
                 'ваше артериальное давление!\n' \
@@ -350,7 +353,7 @@ class DataCollectionDialog(ConversationHandler):
     def stop(update: Update, context: CallbackContext):
         user = context.user_data['user']
         # Если сообщение еще не обновилось
-        if not user.is_msg_updated():
+        if not Notification.is_msg_updated(user):
             context.bot.delete_message(update.effective_chat.id,
                                        user.msg_to_del.message_id)
 
