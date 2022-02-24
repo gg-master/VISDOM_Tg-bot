@@ -132,7 +132,7 @@ class PatientRegistrationDialog(ConversationHandler):
                 ],
                 TYPING_CODE: [
                     MessageHandler(Filters.text & ~Filters.command,
-                                   self.save_code)
+                                   self.save_code, run_async=False)
                 ],
             },
             fallbacks=[
@@ -204,6 +204,7 @@ class PatientRegistrationDialog(ConversationHandler):
                     text=text, reply_markup=kb)
                 context.chat_data['st_msg'] = msg.message_id
             except error.Unauthorized:
+                context.user_data[START_OVER] = False
                 return STOPPING
         context.user_data[START_OVER] = False
         return PATIENT_REGISTRATION_ACTION
@@ -217,19 +218,20 @@ class PatientRegistrationDialog(ConversationHandler):
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text)
         else:
+            context.user_data[START_OVER] = False
             try:
                 update.message.reply_text(text=text)
             except error.Unauthorized:
                 return STOPPING
-        context.user_data[START_OVER] = False
         return TYPING_CODE
 
     @staticmethod
     def save_code(update: Update, context: CallbackContext):
-        context.user_data[START_OVER] = True
         try:
             if update.message:
                 context.user_data['user'].set_code(update.message.text)
+
+                context.user_data[START_OVER] = True
                 return PatientRegistrationDialog.start(update, context)
         except ValueError:
             pass
@@ -238,6 +240,7 @@ class PatientRegistrationDialog(ConversationHandler):
             update.message.reply_text(text=text)
         except error.Unauthorized:
             return STOPPING
+        context.user_data[START_OVER] = True
         return PatientRegistrationDialog.conf_code(update, context)
 
     @staticmethod
@@ -401,11 +404,11 @@ class ConfigureTZDialog(ConversationHandler):
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text)
         else:
+            context.user_data[START_OVER] = False
             try:
                 update.message.reply_text(text=text)
             except error.Unauthorized:
                 return STOPPING
-        context.user_data[START_OVER] = False
         return TYPING_TZ
 
     @staticmethod
@@ -422,7 +425,10 @@ class ConfigureTZDialog(ConversationHandler):
         except ValueError:
             text = 'Часовой пояс был введен в неправильном формате. ' \
                    'Попробуйте снова.'
-            update.message.reply_text(text=text)
+            try:
+                update.message.reply_text(text=text)
+            except error.Unauthorized:
+                return STOPPING
 
             context.user_data[START_OVER] = True
             return ConfigureTZDialog.conf_tz(update, context)
@@ -618,7 +624,7 @@ class DoctorRegistrationDialog(ConversationHandler):
         context.bot.delete_message(update.effective_chat.id,
                                    context.chat_data['st_msg'])
         try:
-            msg = update.message.reply_text(text=text)
+            msg = update.effective_chat.send_message(text=text)
             context.chat_data['st_msg'] = msg.message_id
         except error.Unauthorized:
             return STOPPING

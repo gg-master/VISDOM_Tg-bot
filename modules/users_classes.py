@@ -14,7 +14,7 @@ from db_api import (add_patient, add_doctor, add_record, change_accept_time,
                     get_last_record_by_accept_time, get_patient_by_chat_id,
                     get_doctor_by_chat_id, get_all_records_by_accept_time,
                     get_patient_by_user_code, get_doctor_by_code,
-                    get_region_by_code)
+                    get_region_by_code, get_all_patient_by_user_code)
 from modules.location import Location
 from modules.notification_dailogs import DataCollectionDialog, PillTakingDialog
 from modules.patient_list import patient_list
@@ -77,10 +77,12 @@ class PatientUser(BasicUser):
         'MOR': [PillTakingDialog, DataCollectionDialog],
         'EVE': [DataCollectionDialog]
     }
+    doctor_patt = r'^\d{2,}([a-zA-Zа-яА-ЯёЁ]{3}\d*)[a-zA-Zа-яА-ЯёЁ]{3}\d*$'
+    region_patt = r'^(\d{2,})[a-zA-Zа-яА-ЯёЁ]{3}\d*[a-zA-Zа-яА-ЯёЁ]{3}\d*$'
 
     def __init__(self, chat_id: int):
         super().__init__(chat_id)
-        self.code = self.doctor = None
+        self.code = self.doctor_id = None
 
         self.location = self.tz = self.accept_times = None
         self.times = self.default_times.copy()
@@ -108,24 +110,20 @@ class PatientUser(BasicUser):
         self.code = code
 
     def validate_code(self):
-        patients = get_patient_by_user_code(self.code)
+        patients = get_all_patient_by_user_code(self.code)
         if patients:
-            self.code += str(int('0' + re.findall(r'^\d{2,}[a-zA-Zа-яА-ЯёЁ]{3}'
-                                                  r'\d*[a-zA-Zа-яА-ЯёЁ]{3}\d*$'
-                                                  , patients[-1].code)[0]))
-            print(self.code)
+            # Добавляем цифры к коду, если совпали
+            self.code += str(int('0' + re.findall(
+                r'^\d{2,}[a-zA-Zа-яА-ЯёЁ]{3}\d*[a-zA-Zа-яА-ЯёЁ]{3}(\d*)$',
+                patients[-1].user_code)[0]) + 1)
 
         # Из user_code вытаскиваем код врача
-        doc = get_doctor_by_code(re.findall(r'^\d{2,}([a-zA-Zа-яА-ЯёЁ]{3}\d*)'
-                                            r'[a-zA-Zа-яА-ЯёЁ]{3}\d*$',
-                                            self.code)[0])
+        doc = get_doctor_by_code(re.findall(self.doctor_patt, self.code)[0])
         if not doc:
             raise DoctorNotFound(f'Ваш доктор не найден. Проверьте Ваш код.')
-        if not get_region_by_code(
-            re.findall(r'^(\d{2,})[a-zA-Zа-яА-ЯёЁ]{3}\d*'
-                       r'[a-zA-Zа-яА-ЯёЁ]{3}\d*$', self.code)[0]):
+        if not get_region_by_code(re.findall(self.region_patt, self.code)[0]):
             raise RegionNotFound('Ваш регион не найден. Проверьте Ваш код.')
-        self.doctor = doc
+        self.doctor_id = doc.id
 
     def change_membership(self, context: CallbackContext):
         self.is_registered = False
@@ -187,12 +185,10 @@ class PatientUser(BasicUser):
             )
 
     def recreate_notification(self, context: CallbackContext, **kwargs):
-        Thread(target=self.create_notification,
-               args=(context,), kwargs=kwargs).start()
+        self.create_notification(context, **kwargs)
 
     def restore_repeating_task(self, context: CallbackContext, **kwargs):
-        Thread(target=restore_repeating_task,
-               args=(self, context), kwargs=kwargs).start()
+        restore_repeating_task(self, context, **kwargs)
 
     def state(self):
         """Возвращает имя временного таймера и состояние
@@ -273,9 +269,10 @@ class PatientUser(BasicUser):
             change_patients_time_zone(self.chat_id, self.tz.zone)
 
     def restore(self, code: str, times: Dict[str, dt.time], tz_str: str,
-                accept_times):
+                accept_times, doctor_id):
         super().register()
         self.code = code
+        self.doctor_id = doctor_id
 
         # Конвертирование часового пояса из строки в объект
         self.tz = pytz.timezone(tz_str)
@@ -327,7 +324,7 @@ class PatientUser(BasicUser):
             user_code=self.code,
             time_zone=self.tz.zone,
             chat_id=self.chat_id,
-            doctor_id=self.doctor.id
+            doctor_id=self.doctor_id
         )
         self.save_updating(context, check_user=False)
 
@@ -362,12 +359,27 @@ class PatientUser(BasicUser):
         if (not mor_record[0] and mor_record[1] >= 25) or \
                 (not eve_record[0] and eve_record[1] >= 25):
             self.alarmed['MOR' if mor_record[1] >= 25 else "EVE"] = True
+
+            # Количество дней без ответа от пациента
+            days = int(mor_record[1] / 24) if self.alarmed['MOR'] \
+                else int(eve_record[1] / 24)
+
+            # Ежедневное уведомление для доктора
             DoctorUser.send_alarm(
                 context=context,
                 user=self,
-                days=int(mor_record[1] / 24) if self.alarmed['MOR']
-                else int(eve_record[1] / 24)
+                doctor_code=re.findall(self.doctor_patt, self.code)[0],
+                days=days
             )
+
+            # Еженедельное уведомление для региона
+            if not days % 7:
+                RegionUser.send_alarm(
+                    context=context,
+                    user=self,
+                    doctor_code=re.findall(self.doctor_patt, self.code)[0],
+                    days=days
+                )
 
     def check_last_record_by_name(self, name) -> Tuple[bool, int]:
         """
@@ -386,9 +398,6 @@ class PatientUser(BasicUser):
 
 
 class DoctorUser(BasicUser):
-    def __init__(self, chat_id):
-        super().__init__(chat_id)
-
     def register(self, update: Update, context: CallbackContext):
         super().register()
         logging.info(f'REGISTER NEW DOCTOR: {update.effective_user.id}')
@@ -405,9 +414,8 @@ class DoctorUser(BasicUser):
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
         user = kwargs['user']
-        doctor = get_all_doctors()
+        doctor = get_doctor_by_code(kwargs['doctor_code'])
         if doctor:
-            doctor = doctor[0]
             text = f'❗️ Внимание ❗️\n' \
                    f'В течении суток пациент {user.code} не принял ' \
                    f'лекарство/не отправил данные давления и ЧСС.\n' \
@@ -426,4 +434,26 @@ class DoctorUser(BasicUser):
 
 
 class RegionUser(BasicUser):
-    pass
+    @classmethod
+    def send_alarm(cls, context, **kwargs):
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+        user = kwargs['user']
+        doctor = get_doctor_by_code(kwargs['doctor_code'])
+        if doctor:
+            text = f'❗️ Внимание ❗️\n' \
+                   f'В течении суток пациент {user.code} не принял ' \
+                   f'лекарство/не отправил данные давления и ЧСС.\n' \
+                   f'Дней без ответа: {kwargs["days"]}'
+
+            kb = InlineKeyboardMarkup(
+                [[InlineKeyboardButton(
+                    'Получить данные о пациенте',
+                    callback_data=f'A_PATIENT_DATA&{user.code}')]],
+                one_time_keyboard=True)
+            try:
+                context.bot.send_message(doctor.chat_id, text,
+                                         reply_markup=kb)
+            except error.Unauthorized:
+                pass
+

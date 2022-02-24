@@ -32,6 +32,7 @@ class Restore:
         p.restore(
             code=patient.user_code,
             tz_str=patient.time_zone,
+            doctor_id=patient.doctor_id,
             times={'MOR': accept_times[0].time, 'EVE': accept_times[1].time},
             accept_times={'MOR': accept_times[0].id, 'EVE': accept_times[1].id}
         )
@@ -67,7 +68,7 @@ class Restore:
         try:
             context.bot.send_message(kwargs['chat_id'], text=text,
                                      reply_markup=kb)
-        except error.Unauthorized:
+        except (error.Unauthorized, error.BadRequest):
             for task in (f'{kwargs["chat_id"]}-MOR',
                          f'{kwargs["chat_id"]}-EVE',
                          f'{kwargs["chat_id"]}-rep_task'):
