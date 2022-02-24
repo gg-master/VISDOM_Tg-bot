@@ -49,11 +49,21 @@ def registered_doctors(func):
         user = context.user_data.get('user')
         if type(user) is DoctorUser and user.registered():
             return func(update, context, *args, **kwargs)
-        return just_for_doctor(update)
+        return for_unregistered_users(update)
     return decorator
 
 
-def just_for_doctor(update: Update):
+def registered_regions(func):
+    def decorator(update: Update, context: CallbackContext, *args, **kwargs):
+        from modules.users_classes import RegionUser
+        user = context.user_data.get('user')
+        if type(user) is RegionUser and user.registered():
+            return func(update, context, *args, **kwargs)
+        return for_unregistered_users(update)
+    return decorator
+
+
+def for_unregistered_users(update: Update):
     try:
         update.effective_chat.send_message(
             'Это возможность предусмотрена только для специальных сотрудников')

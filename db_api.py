@@ -1,5 +1,6 @@
 import csv
 import os
+import re
 from typing import Any
 
 from openpyxl import Workbook, styles
@@ -171,10 +172,25 @@ def change_patients_time_zone(chat_id: int, time_zone: int) -> None:
         db_sess.commit()
 
 
-def patient_exists_by_user_code(user_code):
+def patient_exists_by_user_code(user_code,
+                                region_code=False, doctor_code=False):
     with db_session.create_session() as db_sess:
-        return db_sess.query(db_sess.query(Patient).filter(
-            Patient.user_code == user_code).exists()).scalar()
+        if not (region_code and doctor_code):
+            return db_sess.query(db_sess.query(Patient).filter(
+                Patient.user_code == user_code).exists()).scalar()
+        elif region_code:
+            if re.findall(
+                    r'^(\d{2,})[a-zA-Zа-яА-ЯёЁ]{3}\d*[a-zA-Zа-яА-ЯёЁ]{3}\d*$',
+                    user_code)[0] == region_code:
+                return db_sess.query(db_sess.query(Patient).filter(
+                    Patient.user_code == user_code).exists()).scalar()
+        else:
+            if re.findall(
+                    r'^\d{2,}([a-zA-Zа-яА-ЯёЁ]{3}\d*)[a-zA-Zа-яА-ЯёЁ]{3}\d*$',
+                    user_code) == doctor_code:
+                return db_sess.query(db_sess.query(Patient).filter(
+                    Patient.user_code == user_code).exists()).scalar()
+    return None
 
 
 def change_patients_membership(user_code: str, member: bool) -> None:
@@ -212,18 +228,23 @@ def make_file_by_patient_user_code(user_code):
     wb.save(filename=f'static/{user_code}_data.xlsx')
 
 
-def make_file_patients():
+def make_file_patients(region_code=False, doctor_code=False):
     if not os.path.isdir("static"):
         os.mkdir("static")
+    response = '''SELECT patient.id, patient.user_code,
+                  record.sys_press, record.dias_press,
+                  record.heart_rate, record.time, record.time_zone,
+                  record.response_time, record.comment FROM patient
+                  JOIN accept_time on patient.id =
+                  accept_time.Patient_id JOIN record on accept_time.id
+                  = record.accept_time_id'''
+    if region_code or doctor_code:
+        if region_code:
+            response += f" WHERE patient.user_code LIKE '{region_code}%'"
+        elif doctor_code:
+            response += f" WHERE patient.user_code LIKE '___{doctor_code}%'"
     with db_session.create_session() as db_sess:
-        records = db_sess.execute('SELECT patient.id, patient.user_code,'
-                                  ' record.sys_press, record.dias_press,'
-                                  ' record.heart_rate, record.time, record.'
-                                  'time_zone, record.response_time,'
-                                  ' record.comment FROM patient JOIN'
-                                  ' accept_time on patient.id = accept_time.'
-                                  'Patient_id JOIN record on accept_time.id'
-                                  ' = record.accept_time_id')
+        records = db_sess.execute(response)
     # wb = Workbook()
     # ws = wb.active
     headers = ['ID пациента', 'Код пациента', 'Систолическое давление',
@@ -247,12 +268,22 @@ def make_file_patients():
     # wb.save(filename='static/statistics.xlsx')
 
 
-def make_patient_list():
+def make_patient_list(region_code=False, doctor_code=False):
     if not os.path.isdir("static"):
         os.mkdir("static")
     with db_session.create_session() as db_sess:
-        patients_user_codes = db_sess.query(Patient.user_code,
-                                            Patient.member).all()
+        if not (region_code or doctor_code):
+            patients_user_codes = db_sess.query(Patient.user_code,
+                                                Patient.member).all()
+        elif region_code:
+            patients_user_codes = db_sess.query(
+                Patient.user_code, Patient.member) \
+                .filter(Patient.user_code.like(f"{region_code}%")).all()
+        else:
+            patients_user_codes = db_sess.query(
+                Patient.user_code, Patient.member) \
+                .filter(Patient.user_code.like(f"___{doctor_code}%")).all()
+
     wb = Workbook()
     ws = wb.active
     for i in range(len(patients_user_codes)):

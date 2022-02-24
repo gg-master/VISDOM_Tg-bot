@@ -56,7 +56,7 @@ class StartDialog(ConversationHandler):
                                   callback_data=f'{SIGN_UP_AS_DOCTOR}')
              ],
             [InlineKeyboardButton(text='Я сотрудник',
-                                  callback_data=f'{SIGH_UP_AS_REGION}'),
+                                  callback_data=f'{SIGN_UP_AS_REGION}'),
              InlineKeyboardButton(text='ВолгГМУ',
                                   callback_data=f'{SIGN_UP_AS_UNIVERSITY}')
              ]
@@ -659,8 +659,8 @@ class RegionRegistrationDialog(ConversationHandler):
         super().__init__(
             name=self.__class__.__name__,
             entry_points=[CallbackQueryHandler(
-                self.pre_start, pattern=f'^{SIGH_UP_AS_REGION}$',
-                run_async=False)],
+                self.pre_start, pattern=f'^{SIGN_UP_AS_REGION}$'),
+                CommandHandler('reg_region', self.pre_start, run_async=False)],
             states={
                 TYPING_TOKEN: [
                     MessageHandler(Filters.text & ~Filters.command,
@@ -693,13 +693,11 @@ class RegionRegistrationDialog(ConversationHandler):
 
     @staticmethod
     def start(update: Update, context: CallbackContext):
-        text = f'Введите токен для регистрации сотрудника.'
-
+        text = f'Введите токен для регистрации региона.'
         context.bot.delete_message(update.message.chat_id,
                                    context.chat_data['st_msg'])
         msg = update.message.reply_text(text=text)
         context.chat_data['st_msg'] = msg.message_id
-
         return TYPING_TOKEN
 
     @staticmethod

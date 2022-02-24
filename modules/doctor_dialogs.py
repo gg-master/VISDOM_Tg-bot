@@ -87,10 +87,10 @@ class DoctorJob(ConversationHandler):
     @registered_doctors
     def send_user_data(update: Update, context: CallbackContext):
         user_code = update.message.text
-        if patient_exists_by_user_code(user_code):
+        if patient_exists_by_user_code(
+                user_code, doctor_code='034ВВП'):
             try:
                 make_file_by_patient_user_code(user_code)
-
                 update.effective_chat.send_document(
                     open(f'static/{user_code}_data.xlsx', 'rb'))
 
@@ -105,31 +105,33 @@ class DoctorJob(ConversationHandler):
                 logging.info(ex)
         else:
             update.message.reply_text(
-                'Пациента с таким кодом не существует')
+                'Пациента с таким кодом не существует или у вас нет прав'
+                ' для просмотра.')
         return END
 
     @staticmethod
     @registered_doctors
     def exclude_patient(update: Update, context: CallbackContext):
-        user_code = update.message.text
-        patient = get_patient_by_user_code(user_code)
-        try:
-            if patient:
-                change_patients_membership(user_code, False)
-
-                patient_list[patient.chat_id].change_membership(context)
-                logging.info(f'Patient {user_code}-{patient.chat_id} EXCLUDE')
-
-                context.bot.send_message(
-                    patient.chat_id, 'Вы были исключны из исследования.\n'
-                                     'Если это ошибка, обратитесь к врачу.')
-                update.message.reply_text(f'Пациент {user_code} был исключен '
-                                          f'из исследования.')
-            else:
-                update.message.reply_text(
-                    'Пациента с таким кодом не существует.')
-        except error.Unauthorized:
-            pass
+        # user_code = update.message.text
+        # patient = get_patient_by_user_code(user_code)
+        # try:
+        #     if patient:
+        #         change_patients_membership(user_code, False)
+        #
+        #         patient_list[patient.chat_id].change_membership(context)
+        #         logging.info(f'Patient {user_code}-{patient.chat_id} EXCLUDE')
+        #
+        #         context.bot.send_message(
+        #             patient.chat_id, 'Вы были исключны из исследования.\n'
+        #                              'Если это ошибка, обратитесь к врачу.')
+        #         update.message.reply_text(f'Пациент {user_code} был исключен '
+        #                                   f'из исследования.')
+        #     else:
+        #         update.message.reply_text(
+        #             'Пациента с таким кодом не существует или у вас нет'
+        #             ' прав его удаления')
+        # except error.Unauthorized:
+        #     pass
         return END
 
     @staticmethod
@@ -149,7 +151,7 @@ class DoctorJob(ConversationHandler):
     @staticmethod
     @registered_doctors
     def send_users_data(update: Update, context: CallbackContext):
-        make_file_patients()
+        make_file_patients(doctor_code='034ВВП')
         try:
             update.effective_chat.send_document(
                 open('static/statistics.csv', 'rb'))
@@ -168,7 +170,7 @@ class DoctorJob(ConversationHandler):
     @staticmethod
     @registered_doctors
     def send_patients_list(update: Update, context: CallbackContext):
-        make_patient_list()
+        make_patient_list(doctor_code='034ВВП')
         try:
             update.effective_chat.send_document(
                 open('static/Список пациентов.xlsx', 'rb'))

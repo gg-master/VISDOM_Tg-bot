@@ -7,7 +7,7 @@ END = ConversationHandler.END
     # State definitions for top level conversation
     START_SELECTORS,
     # Constants
-    SIGN_UP_AS_PATIENT, SIGN_UP_AS_DOCTOR, SIGH_UP_AS_REGION,
+    SIGN_UP_AS_PATIENT, SIGN_UP_AS_DOCTOR, SIGN_UP_AS_REGION,
     SIGN_UP_AS_UNIVERSITY
 ) = map(chr, range(5))
 
