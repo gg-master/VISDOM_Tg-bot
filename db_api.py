@@ -87,6 +87,13 @@ def get_all_doctors():
         return db_sess.query(Doctor).all()
 
 
+def get_all_doctors_by_user_code(code) -> list:
+    with db_session.create_session() as db_sess:
+        return sorted(db_sess.query(Doctor).filter(
+            Doctor.doctor_code.like(f'{code}%')).all(),
+                      key=lambda x: x.doctor_code)
+
+
 def get_doctor_by_code(code: str) -> Doctor:
     with db_session.create_session() as db_sess:
         return db_sess.query(Doctor).filter(
@@ -116,11 +123,11 @@ def get_patient_by_chat_id(chat_id: int) -> Patient:
             Patient.chat_id == chat_id).first()
 
 
-def get_all_patient_by_user_code(user_code) -> list:
+def get_all_patients_by_user_code(user_code) -> list:
     with db_session.create_session() as db_sess:
         return sorted(db_sess.query(Patient).filter(
-            Patient.user_code.ilike(f'{user_code}%')).all(),
-                      key=lambda x: len(x.user_code))
+            Patient.user_code.like(f'{user_code}%')).all(),
+                      key=lambda x: x.user_code)
 
 
 def get_patient_by_user_code(user_code: str) -> Patient:
