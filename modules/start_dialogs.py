@@ -3,12 +3,11 @@ from telegram import (InlineKeyboardButton, InlineKeyboardMarkup,
 from telegram.ext import (CallbackContext, CallbackQueryHandler,
                           CommandHandler, Filters, MessageHandler)
 
-from db_api import get_all_doctors, get_region_by_chat_id
 from modules.dialogs_shortcuts.start_shortcuts import *
-from modules.doctor_dialogs import DoctorJob
+from modules.patronage_dialogs import DoctorJob, RegionJob, UniJob
 from modules.restore import Restore
 from modules.users_classes import BasicUser, PatientUser, DoctorUser, \
-    RegionUser
+    RegionUser, UniUser
 from tools.decorators import not_registered_users
 from tools.exceptions import UserExists, DoctorNotFound, RegionNotFound
 from tools.prepared_answers import START_MSG
@@ -22,12 +21,35 @@ def user_separation(func):
             return func(update, context)
         else:
             if type(user) is PatientUser:
+                if not user.member:
+                    return func(update, context)
                 PatientRegistrationDialog.restore_main_msg(update, context)
             elif type(user) is DoctorUser:
                 DoctorJob.default_job(update, context)
+            elif type(user) is RegionUser:
+                RegionJob.default_job(update, context)
+            elif type(user) is UniUser:
+                UniJob.default_job(update, context)
             return END
 
     return decorated_func
+
+
+def pre_start_check(cls, update, context):
+    dct = {
+        (BasicUser.USER_IS_PATIENT, BasicUser.USER_EXCLUDED):
+            PatientRegistrationDialog,
+        (BasicUser.USER_IS_DOCTOR,): DoctorRegistrationDialog,
+        (BasicUser.USER_IS_REGION,): RegionRegistrationDialog,
+        (BasicUser.USER_IS_UNI,): UniRegistrationDialog,
+    }
+    res = context.user_data['user'].check_user_reg()
+    for k, v in dct.items():
+        if res in k:
+            if cls is v:
+                return res
+            return v.pre_start(update, context, res=res)
+    return res
 
 
 class StartDialog(ConversationHandler):
@@ -37,7 +59,9 @@ class StartDialog(ConversationHandler):
             entry_points=[CommandHandler('start', self.start)],
             states={
                 START_SELECTORS: [PatientRegistrationDialog(),
-                                  DoctorRegistrationDialog()],
+                                  DoctorRegistrationDialog(),
+                                  RegionRegistrationDialog(),
+                                  UniRegistrationDialog()],
             },
             fallbacks=[CommandHandler('stop', self.stop),
                        CommandHandler('start', self.restart)])
@@ -149,17 +173,19 @@ class PatientRegistrationDialog(ConversationHandler):
         )
 
     @staticmethod
-    def pre_start(update: Update, context: CallbackContext):
-        user = context.user_data['user']
-        if type(user) is BasicUser:
-            context.user_data['user'] = PatientUser(update.effective_chat.id)
-        res = context.user_data['user'].check_user_reg()
+    def pre_start(update: Update, context: CallbackContext, res=None):
+        res = pre_start_check(PatientRegistrationDialog, update, context) \
+            if not res else res
         if res in [BasicUser.USER_EXCLUDED, BasicUser.USER_IS_PATIENT]:
             return PatientRegistrationDialog.cant_registered(
                 update, context, res)
-        if res == BasicUser.USER_IS_DOCTOR:
-            return DoctorRegistrationDialog.pre_start(update, context, res=res)
-        return PatientRegistrationDialog.start(update, context)
+        if res == BasicUser.USER_IS_NOT_REGISTERED:
+            if type(context.user_data['user']) is BasicUser:
+                context.user_data['user'] = PatientUser(
+                    update.effective_chat.id)
+
+            return PatientRegistrationDialog.start(update, context)
+        return res
 
     @staticmethod
     def start(update: Update, context: CallbackContext):
@@ -576,12 +602,13 @@ class ConfigureNotifTimeDialog(ConversationHandler):
 
 
 class DoctorRegistrationDialog(ConversationHandler):
-    def __init__(self):
+    def __init__(self, **kwargs):
         super().__init__(
             name=self.__class__.__name__,
             entry_points=[CallbackQueryHandler(self.pre_start,
-                          pattern=f'^{SIGN_UP_AS_DOCTOR}$', run_async=False)],
-            # CommandHandler('reg_doctor', self.pre_start, run_async=False)
+                          pattern=f'^{SIGN_UP_AS_DOCTOR}$'
+                          if not kwargs.get('patt') else kwargs['patt'],
+                                               run_async=False)],
             states={
                 TYPING_TOKEN: [
                     MessageHandler(Filters.text & ~Filters.command,
@@ -608,7 +635,8 @@ class DoctorRegistrationDialog(ConversationHandler):
     @staticmethod
     @not_registered_users
     def pre_start(update: Update, context: CallbackContext, res=None):
-        res = context.user_data['user'].check_user_reg() if not res else res
+        res = pre_start_check(DoctorRegistrationDialog, update, context)\
+            if not res else res
         if res == BasicUser.USER_IS_DOCTOR:
             text = 'Вы не можете повторно зарегистрироваться.\n'
             try:
@@ -620,12 +648,13 @@ class DoctorRegistrationDialog(ConversationHandler):
             Restore.restore_doctor_msg(
                 context, chat_id=update.effective_chat.id)
             return STOPPING
-        if res in [BasicUser.USER_EXCLUDED, BasicUser.USER_IS_PATIENT]:
-            return PatientRegistrationDialog.cant_registered(
-                update, context, res)
+        if res == BasicUser.USER_IS_NOT_REGISTERED:
+            if type(context.user_data['user']) is BasicUser:
+                context.user_data['user'] = DoctorUser(
+                    update.effective_chat.id)
 
-        context.user_data['user'] = DoctorUser(update.effective_chat.id)
-        return DoctorRegistrationDialog.start(update, context)
+            return DoctorRegistrationDialog.start(update, context)
+        return res
 
     @staticmethod
     def start(update: Update, context: CallbackContext):
@@ -711,13 +740,97 @@ class DoctorRegistrationDialog(ConversationHandler):
         return END
 
 
-class RegionRegistrationDialog(ConversationHandler):
+class RegionRegistrationDialog(DoctorRegistrationDialog):
+    def __init__(self):
+        super().__init__(patt=f'^{SIGH_UP_AS_REGION}$')
+
+    @staticmethod
+    @not_registered_users
+    def pre_start(update: Update, context: CallbackContext, res=None):
+        res = pre_start_check(RegionRegistrationDialog, update, context) \
+            if not res else res
+        if res == BasicUser.USER_IS_REGION:
+            text = 'Вы не можете повторно зарегистрироваться.\n'
+            try:
+                context.bot.edit_message_text(text, update.effective_chat.id,
+                                              context.chat_data['st_msg'],
+                                              reply_markup=None)
+            except error.Unauthorized:
+                return STOPPING
+            Restore.restore_region_msg(
+                context, chat_id=update.effective_chat.id)
+            return STOPPING
+        if res == BasicUser.USER_IS_NOT_REGISTERED:
+            if type(context.user_data['user']) is BasicUser:
+                context.user_data['user'] = RegionUser(
+                    update.effective_chat.id)
+
+            return RegionRegistrationDialog.start(update, context)
+        return res
+
+    @classmethod
+    def get_token(cls, update: Update, context: CallbackContext):
+        token = update.message.text
+        try:
+            if token == get_from_env('REGION_TOKEN'):
+                context.user_data[START_OVER] = True
+                return cls.conf_code(update, context)
+            update.message.reply_text('Неверный токен.\nПопробуйте снова.')
+        except error.Unauthorized:
+            return STOPPING
+        return TYPING_TOKEN
+
+    @staticmethod
+    def conf_code(update: Update, context: CallbackContext):
+        text = 'Введите Ваш персональный код.\n' \
+               'Формат: [КОД_региона (>2сим)]'
+
+        if not context.user_data.get(START_OVER):
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(text=text)
+        else:
+            context.user_data[START_OVER] = False
+            try:
+                msg = update.message.reply_text(text=text)
+                context.chat_data['st_msg'] = msg.message_id
+            except error.Unauthorized:
+                return STOPPING
+        return TYPING_CODE
+
+    @classmethod
+    def end_reg(cls, update: Update, context: CallbackContext):
+        try:
+            context.user_data['user'].validate_code()
+        except UserExists as e:
+            kb = ReplyKeyboardMarkup([[e.args[1]]], one_time_keyboard=True,
+                                     row_width=1, resize_keyboard=True)
+            update.effective_chat.send_message(text=str(e.args[0]),
+                                               reply_markup=kb)
+            context.user_data[START_OVER] = True
+            return cls.conf_code(update, context)
+        except (RegionNotFound, ValueError) as e:
+            update.effective_chat.send_message(text=str(e))
+            context.user_data[START_OVER] = True
+            return cls.conf_code(update, context)
+
+        try:
+            text = f'Вы успешно зарегестрированы!\n'
+            update.effective_chat.send_message(text=text)
+            RegionJob.default_job(update, context)
+        except error.Unauthorized:
+            pass
+
+        context.user_data['user'].register(update, context)
+        return END
+
+
+class UniRegistrationDialog(ConversationHandler):
     def __init__(self):
         super().__init__(
             name=self.__class__.__name__,
-            entry_points=[CallbackQueryHandler(
-                self.pre_start, pattern=f'^{SIGH_UP_AS_REGION}$',
-                run_async=False)],
+            entry_points=[CallbackQueryHandler(self.pre_start,
+                          pattern=f'^{SIGN_UP_AS_UNIVERSITY}$',
+                                               run_async=False)],
             states={
                 TYPING_TOKEN: [
                     MessageHandler(Filters.text & ~Filters.command,
@@ -739,42 +852,40 @@ class RegionRegistrationDialog(ConversationHandler):
 
     @staticmethod
     @not_registered_users
-    def pre_start(update: Update, context: CallbackContext):
-        if get_region_by_chat_id(update.effective_chat.id):
+    def pre_start(update: Update, context: CallbackContext, res=None):
+        res = pre_start_check(UniRegistrationDialog, update, context) \
+            if not res else res
+        if res == BasicUser.USER_IS_UNI:
             text = 'Вы не можете повторно зарегистрироваться.\n'
-            update.effective_chat.send_message(text)
-            Restore.restore_region_msg(
-                context, chat_id=update.effective_chat.id)
-            return END
-        return RegionRegistrationDialog.start(update, context)
+            try:
+                context.bot.edit_message_text(text, update.effective_chat.id,
+                                              context.chat_data['st_msg'],
+                                              reply_markup=None)
+            except error.Unauthorized:
+                return STOPPING
+            Restore.restore_uni_msg(context, chat_id=update.effective_chat.id)
+            return STOPPING
+        if res == BasicUser.USER_IS_NOT_REGISTERED:
+            if type(context.user_data['user']) is BasicUser:
+                context.user_data['user'] = UniUser(update.effective_chat.id)
 
-    @staticmethod
-    def start(update: Update, context: CallbackContext):
-        text = f'Введите токен для регистрации сотрудника.'
+            return DoctorRegistrationDialog.start(update, context)
+        return res
 
-        context.bot.delete_message(update.message.chat_id,
-                                   context.chat_data['st_msg'])
-        msg = update.message.reply_text(text=text)
-        context.chat_data['st_msg'] = msg.message_id
-
-        return TYPING_TOKEN
-
-    @staticmethod
-    def get_token(update: Update, context: CallbackContext):
+    @classmethod
+    def get_token(cls, update: Update, context: CallbackContext):
         token = update.message.text
-        # other_doctors = get_all_doctors()
-        # if other_doctors:
-        #     update.effective_chat.send_message(
-        #         'Вы не можете зарегистрироваться как сотрудник.')
-        #     return END
-        if token == get_from_env('REGION_TOKEN'):
-            context.user_data['user'] = RegionUser(update.effective_chat.id)
-            context.user_data['user'].register(update, context)
-            # keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(
-            #     text='Начать работу', callback_data=DEFAULT_JOB)]])
-            update.effective_chat.send_message('Вы успешно зарегестрированы!')
-            # RegionJob.default_job(update, context)
-            return END
+        try:
+            if token == get_from_env('UNIVERSITY_TOKEN'):
+                context.user_data[START_OVER] = True
 
-        update.message.reply_text('Неверный токен.\nПопробуйте снова.')
+                text = f'Вы успешно зарегестрированы!\n'
+                update.effective_chat.send_message(text=text)
+                UniJob.default_job(update, context)
+
+                context.user_data['user'].register(update, context)
+                return END
+            update.message.reply_text('Неверный токен.\nПопробуйте снова.')
+        except error.Unauthorized:
+            return STOPPING
         return TYPING_TOKEN

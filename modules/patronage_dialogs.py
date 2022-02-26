@@ -12,24 +12,25 @@ from db_api import (change_patients_membership, get_patient_by_user_code,
 from modules.dialogs_shortcuts.start_shortcuts import (END, EXCLUDE_PATIENT,
                                                        SEND_USER_DATA_PAT)
 from modules.users_list import users_list
-from tools.decorators import registered_doctors
+from modules.users_classes import DoctorUser, RegionUser, UniUser
+from tools.decorators import registered_patronages
 
 
-class DoctorJob(ConversationHandler):
+class BaseJob(ConversationHandler):
     def __init__(self):
         super().__init__(
             name=self.__class__.__name__,
             entry_points=[
                 MessageHandler(Filters.regex('^Получить данные по пациенту$'),
-                               DoctorJob.send_user_file),
+                               self.send_user_file),
                 MessageHandler(
                     Filters.regex('^Получить данные по всем пользователям$'),
-                    DoctorJob.send_users_data),
+                    self.send_users_data),
                 MessageHandler(Filters.regex('^Получить список пациентов$'),
-                               DoctorJob.send_patients_list),
+                               self.send_patients_list),
                 MessageHandler(Filters.regex('^Исключить пациента из'
                                              ' исследования$'),
-                               DoctorJob.exclude_patient_state),
+                               self.exclude_patient_state),
                 CallbackQueryHandler(self.alarm_send_p_data,
                                      pattern='^A_PATIENT_DATA')
             ],
@@ -47,29 +48,7 @@ class DoctorJob(ConversationHandler):
         )
 
     @staticmethod
-    def default_job(update: Update, context: CallbackContext):
-        text = f'Ваш персональный код: {context.user_data["user"].code}\n'\
-               f'Для использовния базовго функционала нажмите на' \
-               f' одну из нужных кнопок. \nЧтобы прервать выполнение ' \
-               f'команд отправьте /stop.'
-
-        kb = ReplyKeyboardMarkup(
-            [['Получить данные по пациенту',
-              'Получить данные по всем пользователям'],
-             ['Получить список пациентов',
-              'Исключить пациента из исследования']],
-            row_width=1, resize_keyboard=True)
-        try:
-            msg = update.effective_chat.send_message(text=text,
-                                                     reply_markup=kb)
-            # Закрепляем сообщение, чтобы пользователь не потерялся
-            update.effective_chat.unpin_all_messages()
-            update.effective_chat.pin_message(msg.message_id)
-        except error.Unauthorized:
-            pass
-
-    @staticmethod
-    @registered_doctors
+    @registered_patronages()
     def send_user_file(update: Update, context: CallbackContext):
         text = 'Введите код пациента'
         try:
@@ -79,7 +58,7 @@ class DoctorJob(ConversationHandler):
             return END
 
     @staticmethod
-    @registered_doctors
+    @registered_patronages(RegionUser, UniUser)
     def exclude_patient_state(update: Update, context: CallbackContext):
         text = 'Введите код пациента'
         try:
@@ -89,7 +68,7 @@ class DoctorJob(ConversationHandler):
             return END
 
     @staticmethod
-    @registered_doctors
+    @registered_patronages()
     def send_user_data(update: Update, context: CallbackContext):
         user_code = update.message.text
         if patient_exists_by_user_code(user_code):
@@ -114,7 +93,6 @@ class DoctorJob(ConversationHandler):
         return END
 
     @staticmethod
-    @registered_doctors
     def exclude_patient(update: Update, context: CallbackContext):
         user_code = update.message.text
         patient = get_patient_by_user_code(user_code)
@@ -138,7 +116,7 @@ class DoctorJob(ConversationHandler):
         return END
 
     @staticmethod
-    @registered_doctors
+    @registered_patronages(DoctorUser, RegionUser)
     def alarm_send_p_data(update: Update, context: CallbackContext):
         data = update.callback_query.data
         user_code = data[data.find('&') + 1:]
@@ -152,7 +130,7 @@ class DoctorJob(ConversationHandler):
             pass
 
     @staticmethod
-    @registered_doctors
+    @registered_patronages()
     def send_users_data(update: Update, context: CallbackContext):
         make_file_patients()
         try:
@@ -171,7 +149,7 @@ class DoctorJob(ConversationHandler):
         return END
 
     @staticmethod
-    @registered_doctors
+    @registered_patronages()
     def send_patients_list(update: Update, context: CallbackContext):
         make_patient_list()
         try:
@@ -197,3 +175,74 @@ class DoctorJob(ConversationHandler):
         except error.Unauthorized:
             pass
         return END
+
+
+class DoctorJob(BaseJob):
+    @staticmethod
+    def default_job(update: Update, context: CallbackContext):
+        text = f'Ваш персональный код: {context.user_data["user"].code}\n' \
+               f'Для использовния базовго функционала нажмите на' \
+               f' одну из нужных кнопок. \nЧтобы прервать выполнение ' \
+               f'команд отправьте /stop.'
+
+        kb = ReplyKeyboardMarkup(
+            [['Получить данные по пациенту',
+              'Получить данные по всем пользователям'],
+             ['Получить список пациентов']],
+            row_width=1, resize_keyboard=True)
+        try:
+            msg = update.effective_chat.send_message(text=text,
+                                                     reply_markup=kb)
+            # Закрепляем сообщение, чтобы пользователь не потерялся
+            update.effective_chat.unpin_all_messages()
+            update.effective_chat.pin_message(msg.message_id)
+        except error.Unauthorized:
+            pass
+
+
+class RegionJob(BaseJob):
+    @staticmethod
+    def default_job(update: Update, context: CallbackContext):
+        text = f'Ваш персональный код: {context.user_data["user"].code}\n' \
+               f'Для использовния базовго функционала нажмите на' \
+               f' одну из нужных кнопок. \nЧтобы прервать выполнение ' \
+               f'команд отправьте /stop.'
+
+        kb = ReplyKeyboardMarkup(
+            [['Получить данные по пациенту',
+              'Получить данные по всем пользователям'],
+             ['Получить список пациентов',
+              'Исключить пациента из исследования']],
+            row_width=1, resize_keyboard=True)
+        try:
+            msg = update.effective_chat.send_message(text=text,
+                                                     reply_markup=kb)
+            # Закрепляем сообщение, чтобы пользователь не потерялся
+            update.effective_chat.unpin_all_messages()
+            update.effective_chat.pin_message(msg.message_id)
+        except error.Unauthorized:
+            pass
+
+
+class UniJob(BaseJob):
+    @staticmethod
+    def default_job(update: Update, context: CallbackContext):
+        text = f'Для использовния базовго функционала нажмите на' \
+               f' одну из нужных кнопок. \nЧтобы прервать выполнение ' \
+               f'команд отправьте /stop.'
+
+        kb = ReplyKeyboardMarkup(
+            [['Получить данные по пациенту',
+              'Получить данные по всем пользователям'],
+             ['Получить список пациентов',
+              'Исключить пациента из исследования']],
+            row_width=1, resize_keyboard=True)
+        try:
+            msg = update.effective_chat.send_message(text=text,
+                                                     reply_markup=kb)
+            # Закрепляем сообщение, чтобы пользователь не потерялся
+            update.effective_chat.unpin_all_messages()
+            update.effective_chat.pin_message(msg.message_id)
+        except error.Unauthorized:
+            pass
+

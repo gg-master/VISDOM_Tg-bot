@@ -32,6 +32,11 @@ def add_university(**kwargs: Any) -> None:
         db_sess.commit()
 
 
+def get_all_uni():
+    with db_session.create_session() as db_sess:
+        return db_sess.query(University).all()
+
+
 def get_university_by_chat_id(chat_id: int) -> University:
     with db_session.create_session() as db_sess:
         return db_sess.query(University).filter(
@@ -52,6 +57,11 @@ def add_region(**kwargs: Any) -> None:
         region = Region(**kwargs)
         db_sess.add(region)
         db_sess.commit()
+
+
+def get_all_regions():
+    with db_session.create_session() as db_sess:
+        return db_sess.query(Region).all()
 
 
 def get_region_by_id(id: int) -> Region:

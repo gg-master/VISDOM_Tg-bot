@@ -18,7 +18,8 @@ def registered_patient(func):
                        *args, **kwargs):
         from modules.users_classes import PatientUser
         user = context.user_data.get('user')
-        if type(user) is PatientUser and user.registered():
+        # Если пользователь - пациент, харегистрирован и не исключен
+        if type(user) is PatientUser and user.registered() and user.member:
             return func(update, context, *args, **kwargs)
         return just_for_registered_msg(update)
 
@@ -43,19 +44,31 @@ def just_for_registered_msg(update: Update):
         pass
 
 
-def registered_doctors(func):
+def _parametrized(dec):
+    def layer(*args, **kwargs):
+        def repl(f):
+            return dec(f, *args, **kwargs)
+        return repl
+    return layer
+
+
+@_parametrized
+def registered_patronages(func, *d_args, **d_kwargs):
     def decorator(update: Update, context: CallbackContext, *args, **kwargs):
-        from modules.users_classes import DoctorUser
+        from modules.users_classes import DoctorUser, RegionUser, UniUser
         user = context.user_data.get('user')
-        if type(user) is DoctorUser and user.registered():
+
+        dec_args = [DoctorUser, RegionUser, UniUser] if not d_args else d_args
+
+        if type(user) in dec_args and user.registered():
             return func(update, context, *args, **kwargs)
-        return just_for_doctor(update)
+        return unavailable_for_user(update)
     return decorator
 
 
-def just_for_doctor(update: Update):
+def unavailable_for_user(update: Update):
     try:
-        update.effective_chat.send_message(
-            'Это возможность предусмотрена только для специальных сотрудников')
+        update.effective_chat.send_message('Вам недоступнен '
+                                           'данный функционал.')
     except error.Unauthorized:
         pass

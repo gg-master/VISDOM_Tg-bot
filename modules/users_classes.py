@@ -12,10 +12,10 @@ from data import db_session
 from db_api import (add_patient, add_doctor, add_record, change_accept_time,
                     change_patients_time_zone,
                     get_last_record_by_accept_time, get_patient_by_chat_id,
-                    get_doctor_by_chat_id, get_all_records_by_accept_time,
+                    get_all_records_by_accept_time,
                     get_doctor_by_code,
                     get_region_by_code, get_all_patients_by_user_code,
-                    add_region, get_all_doctors_by_user_code)
+                    add_region, get_all_doctors_by_user_code, add_university)
 from modules.location import Location
 from modules.notification_dailogs import DataCollectionDialog, PillTakingDialog
 from modules.users_list import users_list
@@ -32,6 +32,8 @@ class BasicUser:
     USER_EXCLUDED = 0
     USER_IS_PATIENT = 1
     USER_IS_DOCTOR = 2
+    USER_IS_REGION = 3
+    USER_IS_UNI = 4
     USER_IS_NOT_REGISTERED = -1
 
     def __init__(self, chat_id):
@@ -46,19 +48,28 @@ class BasicUser:
         self.is_registered = True
 
     def check_user_reg(self):
-        patient_f_p_list = users_list.get(self.chat_id)
-        patient = get_patient_by_chat_id(self.chat_id)
-        doctor = get_doctor_by_chat_id(self.chat_id)
+        # Проверяем сначала список, чтобы не тратить время на запрос в бд
+        user_from_list = users_list.get(self.chat_id)
 
-        if patient or patient_f_p_list or doctor:
-            # Если пациент не участвует в исследовании
-            if not doctor and (not patient.member or
-                               not patient_f_p_list.registered()):
-                return self.USER_EXCLUDED
-            # Если пользователь был зарегистрирован как патронаж
-            if doctor:
+        if user_from_list:
+            if type(user_from_list) is PatientUser:
+                # Если был исключен до перезагрузки бота
+                if not user_from_list.mebmer:
+                    return self.USER_EXCLUDED
+                return self.USER_IS_PATIENT
+            if type(user_from_list) is DoctorUser:
                 return self.USER_IS_DOCTOR
-            # Если пользователь бал зарегистрирован как пациент
+            if type(user_from_list) is RegionUser:
+                return self.USER_IS_REGION
+            if type(user_from_list) is UniUser:
+                return self.USER_IS_UNI
+
+        # Если в списке не нашли, то ищем в бд
+        patient = get_patient_by_chat_id(self.chat_id)
+        if patient:
+            # Если пациент не участвует в исследовании
+            if not patient.member:
+                return self.USER_EXCLUDED
             return self.USER_IS_PATIENT
         # Пользователь не зарегистрирован
         return self.USER_IS_NOT_REGISTERED
@@ -163,6 +174,7 @@ class PatientUser(BasicUser):
     def __init__(self, chat_id: int):
         super().__init__(chat_id)
         self.doctor_id = None
+        self.member = True
 
         self.accept_times = None
         self.p_loc = PatientLocation()
@@ -217,7 +229,7 @@ class PatientUser(BasicUser):
         self.doctor_id = doc.id
 
     def change_membership(self, context: CallbackContext):
-        self.is_registered = False
+        self.member = False
 
         for task in (f'{self.chat_id}-MOR', f'{self.chat_id}-EVE',
                      f'{self.chat_id}-rep_task'):
@@ -344,6 +356,8 @@ class PatientUser(BasicUser):
     def restore(self, code: str, times: Dict[str, dt.time], tz_str: str,
                 accept_times):
         super().register()
+        users_list[self.chat_id] = self
+
         self.code = code
 
         self.p_loc = PatientLocation(tz=pytz.timezone(tz_str))
@@ -508,9 +522,12 @@ class DoctorUser(BasicUser):
 
     def restore(self, code):
         super().register()
+        users_list[self.chat_id] = self
         self.code = code
 
     def _threading_reg(self):
+        users_list[self.chat_id] = self
+
         add_doctor(
             chat_id=self.chat_id,
             doctor_code=self.code,
@@ -542,17 +559,33 @@ class DoctorUser(BasicUser):
 
 
 class RegionUser(BasicUser):
+    def set_code(self, code):
+        # Код не подходит по патерну, то вызываем ошибку
+        if not re.match(r'^\d{2,}$', code):
+            raise ValueError('Код введен в неправильном формате.')
+        self.code = code
+
+    def validate_code(self):
+        # Проверяем, имеется ли регион уже в БД
+        regions = get_region_by_code(self.code)
+
+        if regions:
+            raise UserExists(f'Ваш код совпал с кем-то. Измените Ваш код.')
+
     def register(self, update: Update, context: CallbackContext):
         super().register()
         logging.info(f'REGISTER NEW REGION: {update.effective_user.id}')
         Thread(target=self._threading_reg).start()
 
-    def restore(self):
+    def restore(self, code):
         super().register()
+        users_list[self.chat_id] = self
+        self.code = code
 
     def _threading_reg(self):
-        # TODO добавить необходимые параметры при регистрации
-        add_region(chat_id=self.chat_id)
+        users_list[self.chat_id] = self
+
+        add_region(chat_id=self.chat_id, region_code=self.code)
 
     @classmethod
     def send_alarm(cls, context, **kwargs):
@@ -578,5 +611,19 @@ class RegionUser(BasicUser):
                 pass
 
 
-class Uni(BasicUser):
-    pass
+class UniUser(BasicUser):
+    def register(self, update: Update, context: CallbackContext):
+        super().register()
+        logging.info(f'REGISTER NEW UNI: {update.effective_user.id}')
+        Thread(target=self._threading_reg).start()
+
+    def restore(self):
+        super().register()
+        users_list[self.chat_id] = self
+
+    def _threading_reg(self):
+        users_list[self.chat_id] = self
+
+        add_university(
+            chat_id=self.chat_id,
+        )

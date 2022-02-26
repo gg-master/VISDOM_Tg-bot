@@ -4,8 +4,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, error
 from telegram.ext import CallbackContext
 
 from db_api import (get_accept_times_by_patient_id, get_all_patients,
-                    get_all_doctors)
-from modules.users_classes import DoctorUser
+                    get_all_doctors, get_all_regions, get_all_uni)
+from modules.users_classes import DoctorUser, RegionUser, UniUser
 from modules.users_list import users_list
 from modules.timer import remove_job_if_exists
 from tools.decorators import not_registered_users
@@ -16,12 +16,14 @@ class Restore:
         self.context = CallbackContext(dispatcher)
 
         # Восстановление всех пациентов, которые зарегистрированны и участвуют
-        # self.restore_all_patients()
+        self.restore_all_patients()
 
         # Восстановление патронажа
         self.restore_all_doctors(self.context)
 
-        # TODO восстановление других ролей
+        self.restore_all_regions(self.context)
+
+        self.restore_all_uni(self.context)
 
     def restore_all_patients(self):
         for patient in filter(lambda x: x.member, get_all_patients()):
@@ -38,7 +40,6 @@ class Restore:
             times={'MOR': accept_times[0].time, 'EVE': accept_times[1].time},
             accept_times={'MOR': accept_times[0].id, 'EVE': accept_times[1].id}
         )
-        users_list[p.chat_id] = p
         # Восстановление обычных Daily тасков
         p.recreate_notification(self.context)
 
@@ -51,18 +52,30 @@ class Restore:
         logging.info(f'RESTORED PATIENT NOTIFICATIONS: {p.chat_id}')
         Restore.restore_patient_msg(self.context, chat_id=patient.chat_id)
 
-    def restore_all_doctors(self, context):
-        for doc in get_all_doctors():
-            self.restore_doctor(context, doc)
+    @staticmethod
+    def restore_all_doctors(context):
+        for doctor in get_all_doctors():
+            user = DoctorUser(doctor.chat_id)
+            user.restore(doctor.doctor_code)
+
+            Restore.restore_doctor_msg(context, chat_id=user.chat_id)
 
     @staticmethod
-    def restore_doctor(context, doctor):
-        doc = DoctorUser(doctor.chat_id)
-        doc.restore(doctor.doctor_code)
+    def restore_all_regions(context):
+        for region in get_all_regions():
+            user = RegionUser(region.chat_id)
+            user.restore(region.region_code)
 
-        users_list[doctor.chat_id] = doc
+            Restore.restore_region_msg(context, chat_id=user.chat_id)
 
-        Restore.restore_doctor_msg(context, chat_id=doc.chat_id)
+    @staticmethod
+    def restore_all_uni(context):
+        for uni in get_all_uni():
+            user = UniUser(uni.chat_id)
+            user.restore()
+
+            Restore.restore_uni_msg(context, chat_id=user.chat_id)
+
 
     @staticmethod
     def restore_patient_msg(context, **kwargs):
@@ -105,7 +118,43 @@ class Restore:
 
     @staticmethod
     def restore_region_msg(context, **kwargs):
-        pass
+        text = 'Уважаемый пользователь, чат-бот был перезапущен.\n' \
+               'Приносим свои извенения за доставленные неудобства.\n' \
+               'Чтобы получить доступ к основным функциям нажмите ' \
+               '"Восстановить доступ"'
+        buttons = [
+            [InlineKeyboardButton(text='Восстановить доступ',
+                                  callback_data=f'RESTORE_REGION')],
+        ]
+        keyboard = InlineKeyboardMarkup(buttons)
+        try:
+            context.bot.send_message(
+                kwargs['chat_id'], text=text, reply_markup=keyboard)
+        except error.Unauthorized:
+            pass
+        except Exception as e:
+            logging.warning(f'CANT SEND RESTORE_MSG TO REGION. '
+                            f'CHAT NOT FOUND. \nMORE: {e}')
+
+    @staticmethod
+    def restore_uni_msg(context, **kwargs):
+        text = 'Уважаемый пользователь, чат-бот был перезапущен.\n' \
+               'Приносим свои извенения за доставленные неудобства.\n' \
+               'Чтобы получить доступ к основным функциям нажмите ' \
+               '"Восстановить доступ"'
+        buttons = [
+            [InlineKeyboardButton(text='Восстановить доступ',
+                                  callback_data=f'RESTORE_UNI')],
+        ]
+        keyboard = InlineKeyboardMarkup(buttons)
+        try:
+            context.bot.send_message(
+                kwargs['chat_id'], text=text, reply_markup=keyboard)
+        except error.Unauthorized:
+            pass
+        except Exception as e:
+            logging.warning(f'CANT SEND RESTORE_MSG TO UNI. '
+                            f'CHAT NOT FOUND. \nMORE: {e}')
 
 
 @not_registered_users
@@ -154,7 +203,7 @@ def patient_restore_handler(update: Update, context: CallbackContext):
 
 @not_registered_users
 def doctor_restore_handler(update: Update, context: CallbackContext):
-    from modules.doctor_dialogs import DoctorJob
+    from modules.patronage_dialogs import DoctorJob
 
     doc = context.user_data['user'] = users_list[update.effective_chat.id]
     logging.info(f'RESTORED DOCTOR: {doc.chat_id}')
@@ -166,4 +215,38 @@ def doctor_restore_handler(update: Update, context: CallbackContext):
         pass
     except Exception as e:
         logging.warning(f"CANT SEND RESTORE_MSG TO DOCTOR. CHAT NOT FOUND."
+                        f"\nMORE: {e}")
+
+
+@not_registered_users
+def region_restore_handler(update: Update, context: CallbackContext):
+    from modules.patronage_dialogs import RegionJob
+
+    doc = context.user_data['user'] = users_list[update.effective_chat.id]
+    logging.info(f'RESTORED REGION: {doc.chat_id}')
+    try:
+        update.callback_query.delete_message()
+        update.effective_chat.send_message('Доступ восстановлен.')
+        RegionJob.default_job(update, context)
+    except error.Unauthorized:
+        pass
+    except Exception as e:
+        logging.warning(f"CANT SEND RESTORE_MSG TO REGION. CHAT NOT FOUND."
+                        f"\nMORE: {e}")
+
+
+@not_registered_users
+def uni_restore_handler(update: Update, context: CallbackContext):
+    from modules.patronage_dialogs import UniJob
+
+    doc = context.user_data['user'] = users_list[update.effective_chat.id]
+    logging.info(f'RESTORED UNI: {doc.chat_id}')
+    try:
+        update.callback_query.delete_message()
+        update.effective_chat.send_message('Доступ восстановлен.')
+        UniJob.default_job(update, context)
+    except error.Unauthorized:
+        pass
+    except Exception as e:
+        logging.warning(f"CANT SEND RESTORE_MSG TO UNI. CHAT NOT FOUND."
                         f"\nMORE: {e}")
