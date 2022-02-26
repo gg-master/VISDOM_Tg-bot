@@ -10,7 +10,7 @@ from modules.restore import Restore
 from modules.users_classes import BasicUser, PatientUser, DoctorUser, \
     RegionUser
 from tools.decorators import not_registered_users
-from tools.exceptions import PatientExists, DoctorNotFound, RegionNotFound
+from tools.exceptions import UserExists, DoctorNotFound, RegionNotFound
 from tools.prepared_answers import START_MSG
 from tools.tools import get_from_env
 
@@ -45,9 +45,11 @@ class StartDialog(ConversationHandler):
     @staticmethod
     @user_separation
     def start(update: Update, context: CallbackContext):
-        if not context.user_data.get('user'):
+        user = context.user_data.get('user')
+        print(type(user), end=' - ')
+        if not user or not user.registered():
             context.user_data['user'] = BasicUser(update.effective_chat.id)
-
+        print(type(context.user_data.get('user')))
         buttons = [
             [InlineKeyboardButton(text='Я пациент',
                                   callback_data=f'{SIGN_UP_AS_PATIENT}'),
@@ -210,7 +212,8 @@ class PatientRegistrationDialog(ConversationHandler):
     @staticmethod
     def conf_code(update: Update, context: CallbackContext):
         text = 'Введите Ваш персональный код.\n' \
-               'Формат: [КОД_региона][КОД_врача][КОД_пациента]'
+               'Формат: [КОД_региона (>2сим)][КОД_врача (3-4cим)]' \
+               '[КОД_пациента (>3сим)]'
 
         if not context.user_data.get(START_OVER):
             update.callback_query.answer()
@@ -246,7 +249,7 @@ class PatientRegistrationDialog(ConversationHandler):
         user = context.user_data['user']
         try:
             user.validate_code()
-        except PatientExists as e:
+        except UserExists as e:
             kb = ReplyKeyboardMarkup([[e.args[1]]], one_time_keyboard=True,
                                      row_width=1, resize_keyboard=True)
             update.callback_query.delete_message()
@@ -576,14 +579,17 @@ class DoctorRegistrationDialog(ConversationHandler):
     def __init__(self):
         super().__init__(
             name=self.__class__.__name__,
-            entry_points=[CallbackQueryHandler(
-                self.pre_start, pattern=f'^{SIGN_UP_AS_DOCTOR}$',
-                run_async=False),
-                CommandHandler('reg_doctor', self.pre_start, run_async=False)],
+            entry_points=[CallbackQueryHandler(self.pre_start,
+                          pattern=f'^{SIGN_UP_AS_DOCTOR}$', run_async=False)],
+            # CommandHandler('reg_doctor', self.pre_start, run_async=False)
             states={
                 TYPING_TOKEN: [
                     MessageHandler(Filters.text & ~Filters.command,
-                                   self.get_token, run_async=False)]
+                                   self.get_token, run_async=False)],
+                TYPING_CODE: [
+                    MessageHandler(Filters.text & ~Filters.command,
+                                   self.save_code, run_async=False)
+                ]
             },
             fallbacks=[
                 CommandHandler('stop', StartDialog.stop_nested,
@@ -617,11 +623,13 @@ class DoctorRegistrationDialog(ConversationHandler):
         if res in [BasicUser.USER_EXCLUDED, BasicUser.USER_IS_PATIENT]:
             return PatientRegistrationDialog.cant_registered(
                 update, context, res)
+
+        context.user_data['user'] = DoctorUser(update.effective_chat.id)
         return DoctorRegistrationDialog.start(update, context)
 
     @staticmethod
     def start(update: Update, context: CallbackContext):
-        text = f'Введите токен для регистрации сотрудника.'
+        text = f'Введите токен для регистрации.'
 
         context.bot.delete_message(update.effective_chat.id,
                                    context.chat_data['st_msg'])
@@ -632,28 +640,75 @@ class DoctorRegistrationDialog(ConversationHandler):
             return STOPPING
         return TYPING_TOKEN
 
-    @staticmethod
-    def get_token(update: Update, context: CallbackContext):
+    @classmethod
+    def get_token(cls, update: Update, context: CallbackContext):
         token = update.message.text
-        other_doctors = get_all_doctors()
         try:
-            if other_doctors:
-                update.effective_chat.send_message(
-                    'Вы не можете зарегистрироваться как врач.')
-                return END
             if token == get_from_env('DOCTOR_TOKEN'):
-                context.user_data['user'] = DoctorUser(
-                    update.effective_chat.id)
-                context.user_data['user'].register(update, context)
-
-                update.effective_chat.send_message(
-                    'Вы успешно зарегестрированы!')
-                DoctorJob.default_job(update, context)
-                return END
+                context.user_data[START_OVER] = True
+                return cls.conf_code(update, context)
             update.message.reply_text('Неверный токен.\nПопробуйте снова.')
         except error.Unauthorized:
             return STOPPING
         return TYPING_TOKEN
+
+    @staticmethod
+    def conf_code(update: Update, context: CallbackContext):
+        text = 'Введите Ваш персональный код.\n' \
+               'Формат: [КОД_региона (>2сим)][КОД_врача (3-4сим)]'
+
+        if not context.user_data.get(START_OVER):
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(text=text)
+        else:
+            context.user_data[START_OVER] = False
+            try:
+                msg = update.message.reply_text(text=text)
+                context.chat_data['st_msg'] = msg.message_id
+            except error.Unauthorized:
+                return STOPPING
+        return TYPING_CODE
+
+    @classmethod
+    def save_code(cls, update: Update, context: CallbackContext):
+        try:
+            if update.message:
+                context.user_data['user'].set_code(update.message.text)
+                return cls.end_reg(update, context)
+        except ValueError as e:
+            try:
+                update.message.reply_text(text=str(e))
+            except error.Unauthorized:
+                return STOPPING
+            context.user_data[START_OVER] = True
+            return cls.conf_code(update, context)
+
+    @classmethod
+    def end_reg(cls, update: Update, context: CallbackContext):
+        user = context.user_data['user']
+        try:
+            user.validate_code()
+        except UserExists as e:
+            kb = ReplyKeyboardMarkup([[e.args[1]]], one_time_keyboard=True,
+                                     row_width=1, resize_keyboard=True)
+            update.effective_chat.send_message(text=str(e.args[0]),
+                                               reply_markup=kb)
+            context.user_data[START_OVER] = True
+            return cls.conf_code(update, context)
+        except (RegionNotFound, ValueError) as e:
+            update.effective_chat.send_message(text=str(e))
+            context.user_data[START_OVER] = True
+            return cls.conf_code(update, context)
+
+        try:
+            text = f'Вы успешно зарегестрированы!\n'
+            update.effective_chat.send_message(text=text)
+            DoctorJob.default_job(update, context)
+        except error.Unauthorized:
+            pass
+
+        context.user_data['user'].register(update, context)
+        return END
 
 
 class RegionRegistrationDialog(ConversationHandler):

@@ -5,7 +5,8 @@ from telegram.ext import CallbackContext
 
 from db_api import (get_accept_times_by_patient_id, get_all_patients,
                     get_all_doctors)
-from modules.patient_list import patient_list
+from modules.users_classes import DoctorUser
+from modules.users_list import users_list
 from modules.timer import remove_job_if_exists
 from tools.decorators import not_registered_users
 
@@ -15,10 +16,10 @@ class Restore:
         self.context = CallbackContext(dispatcher)
 
         # Восстановление всех пациентов, которые зарегистрированны и участвуют
-        self.restore_all_patients()
+        # self.restore_all_patients()
 
         # Восстановление патронажа
-        self.restore_doctor(self.context)
+        self.restore_all_doctors(self.context)
 
         # TODO восстановление других ролей
 
@@ -34,11 +35,10 @@ class Restore:
         p.restore(
             code=patient.user_code,
             tz_str=patient.time_zone,
-            doctor_id=patient.doctor_id,
             times={'MOR': accept_times[0].time, 'EVE': accept_times[1].time},
             accept_times={'MOR': accept_times[0].id, 'EVE': accept_times[1].id}
         )
-        patient_list[p.chat_id] = p
+        users_list[p.chat_id] = p
         # Восстановление обычных Daily тасков
         p.recreate_notification(self.context)
 
@@ -51,11 +51,18 @@ class Restore:
         logging.info(f'RESTORED PATIENT NOTIFICATIONS: {p.chat_id}')
         Restore.restore_patient_msg(self.context, chat_id=patient.chat_id)
 
+    def restore_all_doctors(self, context):
+        for doc in get_all_doctors():
+            self.restore_doctor(context, doc)
+
     @staticmethod
-    def restore_doctor(context):
-        patrs = get_all_doctors()
-        if patrs:
-            Restore.restore_doctor_msg(context, chat_id=patrs[0].chat_id)
+    def restore_doctor(context, doctor):
+        doc = DoctorUser(doctor.chat_id)
+        doc.restore(doctor.doctor_code)
+
+        users_list[doctor.chat_id] = doc
+
+        Restore.restore_doctor_msg(context, chat_id=doc.chat_id)
 
     @staticmethod
     def restore_patient_msg(context, **kwargs):
@@ -106,7 +113,7 @@ def patient_restore_handler(update: Update, context: CallbackContext):
     from modules.start_dialogs import PatientRegistrationDialog
 
     # Устанавливаем в контекст ранее созданный объект пациента
-    user = context.user_data['user'] = patient_list[update.effective_chat.id]
+    user = context.user_data['user'] = users_list[update.effective_chat.id]
 
     logging.info(f'RESTORED PATIENT: {user.chat_id}')
 
@@ -147,12 +154,10 @@ def patient_restore_handler(update: Update, context: CallbackContext):
 
 @not_registered_users
 def doctor_restore_handler(update: Update, context: CallbackContext):
-    from modules.users_classes import DoctorUser
     from modules.doctor_dialogs import DoctorJob
 
-    p = context.user_data['user'] = DoctorUser(update.effective_chat.id)
-    p.restore()
-    logging.info(f'RESTORED DOCTOR: {p.chat_id}')
+    doc = context.user_data['user'] = users_list[update.effective_chat.id]
+    logging.info(f'RESTORED DOCTOR: {doc.chat_id}')
     try:
         update.callback_query.delete_message()
         update.effective_chat.send_message('Доступ восстановлен.')
@@ -160,5 +165,5 @@ def doctor_restore_handler(update: Update, context: CallbackContext):
     except error.Unauthorized:
         pass
     except Exception as e:
-        logging.warning(f"CANT SEND RESTORE_MSG TO PATIENT. CHAT NOT FOUND."
+        logging.warning(f"CANT SEND RESTORE_MSG TO DOCTOR. CHAT NOT FOUND."
                         f"\nMORE: {e}")

@@ -11,7 +11,7 @@ from db_api import (change_patients_membership, get_patient_by_user_code,
                     make_patient_list, patient_exists_by_user_code)
 from modules.dialogs_shortcuts.start_shortcuts import (END, EXCLUDE_PATIENT,
                                                        SEND_USER_DATA_PAT)
-from modules.patient_list import patient_list
+from modules.users_list import users_list
 from tools.decorators import registered_doctors
 
 

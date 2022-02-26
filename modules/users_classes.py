@@ -18,10 +18,10 @@ from db_api import (add_patient, add_doctor, add_record, change_accept_time,
                     add_region, get_all_doctors_by_user_code)
 from modules.location import Location
 from modules.notification_dailogs import DataCollectionDialog, PillTakingDialog
-from modules.patient_list import patient_list
+from modules.users_list import users_list
 from modules.timer import (create_daily_notification, remove_job_if_exists,
                            restore_repeating_task)
-from tools.exceptions import DoctorNotFound, PatientExists, RegionNotFound
+from tools.exceptions import DoctorNotFound, UserExists, RegionNotFound
 from tools.tools import convert_tz
 
 db_session.global_init()
@@ -46,7 +46,7 @@ class BasicUser:
         self.is_registered = True
 
     def check_user_reg(self):
-        patient_f_p_list = patient_list.get(self.chat_id)
+        patient_f_p_list = users_list.get(self.chat_id)
         patient = get_patient_by_chat_id(self.chat_id)
         doctor = get_doctor_by_chat_id(self.chat_id)
 
@@ -202,7 +202,7 @@ class PatientUser(BasicUser):
             advise_code = univ_code + str(int('0' + re.findall(
                 r'^\d{2,}[a-zA-Zа-яА-ЯёЁ]{3}\d*[a-zA-Zа-яА-ЯёЁ]{3}(\d*)$',
                 patients[-1].user_code)[0]) + 1)
-            raise PatientExists(
+            raise UserExists(
                 f'Ваш код совпал с кем-то. Измените Ваш код.\n'
                 f'Рекомендуем использовать код: {advise_code}',
                 advise_code
@@ -342,10 +342,9 @@ class PatientUser(BasicUser):
             change_patients_time_zone(self.chat_id, self.p_loc.tz.zone)
 
     def restore(self, code: str, times: Dict[str, dt.time], tz_str: str,
-                accept_times, doctor_id):
+                accept_times):
         super().register()
         self.code = code
-        self.doctor_id = doctor_id
 
         self.p_loc = PatientLocation(tz=pytz.timezone(tz_str))
         self.times = PatientTimes(times)
@@ -374,7 +373,7 @@ class PatientUser(BasicUser):
 
     def _threading_reg(self, update: Update, context: CallbackContext):
         # Добавляем пациента в список пациентов
-        patient_list[self.chat_id] = self
+        users_list[self.chat_id] = self
 
         self.p_loc.save_updating()
 
@@ -468,33 +467,38 @@ class DoctorUser(BasicUser):
     def set_code(self, code):
         # Код не подходит по патерну, то вызываем ошибку
         if not re.match(r'^\d{2,}[a-zA-Zа-яА-ЯёЁ]{3}\d*$', code):
-            raise ValueError()
+            raise ValueError('Код введен в неправильном формате.')
         self.code = code
 
     def validate_code(self):
         # Получаем код врача без цифр в конце
-        univ_code = re.findall(r'(^\d{2,}[a-zA-Zа-яА-ЯёЁ]{3})\d*$',
+        univ_code = re.findall(r'^(\d{2,}[a-zA-Zа-яА-ЯёЁ]{3})\d*$',
                                self.code)[0]
-
+        doc_part = re.findall(r'^\d{2,}([a-zA-Zа-яА-ЯёЁ]{3}\d*)$',
+                              self.code)[0]
         # Получаем всех врачей, у которых одинаково ФИО
-        doctors = get_all_doctors_by_user_code(univ_code)
+        doctors = get_all_doctors_by_user_code(
+            re.findall(r'^\d{2,}([a-zA-Zа-яА-ЯёЁ]{3})\d*$', self.code)[0])
 
-        if doctors and any(map(lambda x: x.doctor_code == self.code, doctors)):
+        if doctors and any(map(lambda x: x.doctor_code == doc_part, doctors)):
             # Добавляем цифры к коду, если совпали
             advise_code = univ_code + str(int('0' + re.findall(
-                r'^\d{2,}[a-zA-Zа-яА-ЯёЁ]{3}(\d*)$',
-                doctors[-1].user_code)[0]) + 1)
-            raise PatientExists(
+               r'^[a-zA-Zа-яА-ЯёЁ]{3}(\d*)$', doctors[-1].doctor_code)[0]) + 1)
+            raise UserExists(
                 f'Ваш код совпал с кем-то. Измените Ваш код.\n'
                 f'Рекомендуем использовать код: {advise_code}',
                 advise_code
             )
 
         region = get_region_by_code(re.findall(r'^(\d{2,})[a-zA-Zа-яА-ЯёЁ]{3}'
-                                               r'(\d*)$', self.code)[0])
+                                               r'\d*$', self.code)[0])
         if not region:
             raise RegionNotFound('Ваш регион не найден. Проверьте Ваш код.')
 
+        if len(doc_part) > 4:
+            raise ValueError('Код введен в неправильном формате.')
+
+        self.code = doc_part
         self.region_id = region.id
 
     def register(self, update: Update, context: CallbackContext):
@@ -502,8 +506,9 @@ class DoctorUser(BasicUser):
         logging.info(f'REGISTER NEW DOCTOR: {update.effective_user.id}')
         Thread(target=self._threading_reg).start()
 
-    def restore(self):
+    def restore(self, code):
         super().register()
+        self.code = code
 
     def _threading_reg(self):
         add_doctor(

@@ -51,7 +51,9 @@ def main():
         os.mkdir("static")
 
     updater = Updater(get_from_env('TOKEN'),
-                      use_context=True, defaults=Defaults(run_async=True))
+                      use_context=True, defaults=Defaults(run_async=True),
+                      request_kwargs={'read_timeout': 10,
+                                      'connect_timeout': 10})
 
     dp = updater.dispatcher
 

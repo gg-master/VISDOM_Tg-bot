@@ -30,6 +30,7 @@ class Notification:
                 context.user_data[START_OVER] = False
                 return END
         else:
+            context.user_data[START_OVER] = False
             # Если сообщения отличаются
             # (т.е. сообщение обновилось, то завершаем диалог)
             if Notification.is_msg_updated(user):
@@ -48,8 +49,6 @@ class Notification:
                 return END
 
         user.msg_to_del = user.active_dialog_msg = msg
-
-        context.user_data[START_OVER] = False
 
 
 class PillTakingDialog(ConversationHandler):

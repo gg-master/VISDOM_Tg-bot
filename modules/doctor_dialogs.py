@@ -11,7 +11,7 @@ from db_api import (change_patients_membership, get_patient_by_user_code,
                     make_patient_list, patient_exists_by_user_code)
 from modules.dialogs_shortcuts.start_shortcuts import (END, EXCLUDE_PATIENT,
                                                        SEND_USER_DATA_PAT)
-from modules.patient_list import patient_list
+from modules.users_list import users_list
 from tools.decorators import registered_doctors
 
 
@@ -48,9 +48,10 @@ class DoctorJob(ConversationHandler):
 
     @staticmethod
     def default_job(update: Update, context: CallbackContext):
-        text = 'Для использовния базовго функционала нажмите на' \
-               ' одну из нужных кнопок. \nЧтобы прервать выполнение ' \
-               'команд отправьте /stop.'
+        text = f'Ваш персональный код: {context.user_data["user"].code}\n'\
+               f'Для использовния базовго функционала нажмите на' \
+               f' одну из нужных кнопок. \nЧтобы прервать выполнение ' \
+               f'команд отправьте /stop.'
 
         kb = ReplyKeyboardMarkup(
             [['Получить данные по пациенту',
@@ -59,7 +60,11 @@ class DoctorJob(ConversationHandler):
               'Исключить пациента из исследования']],
             row_width=1, resize_keyboard=True)
         try:
-            update.effective_chat.send_message(text=text, reply_markup=kb)
+            msg = update.effective_chat.send_message(text=text,
+                                                     reply_markup=kb)
+            # Закрепляем сообщение, чтобы пользователь не потерялся
+            update.effective_chat.unpin_all_messages()
+            update.effective_chat.pin_message(msg.message_id)
         except error.Unauthorized:
             pass
 
@@ -117,7 +122,7 @@ class DoctorJob(ConversationHandler):
             if patient:
                 change_patients_membership(user_code, False)
 
-                patient_list[patient.chat_id].change_membership(context)
+                users_list[patient.chat_id].change_membership(context)
                 logging.info(f'Patient {user_code}-{patient.chat_id} EXCLUDE')
 
                 context.bot.send_message(
