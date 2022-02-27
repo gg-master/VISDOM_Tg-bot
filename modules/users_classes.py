@@ -127,7 +127,7 @@ class PatientUser(BasicUser):
         self.doctor_id = doc.id
 
     def change_membership(self, context: CallbackContext):
-        self.is_registered = False
+        self.is_registered = not self.is_registered
 
         for task in (f'{self.chat_id}-MOR', f'{self.chat_id}-EVE',
                      f'{self.chat_id}-rep_task'):

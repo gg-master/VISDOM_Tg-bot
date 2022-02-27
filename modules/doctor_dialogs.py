@@ -87,6 +87,10 @@ class DoctorJob(ConversationHandler):
     @registered_doctors
     def send_user_data(update: Update, context: CallbackContext):
         user_code = update.message.text
+        if not user_code.startswith(context.user_data['user_code']):
+            update.message.reply_text('У вас нет прав для просмотра'
+                                      ' статистики этого пациента')
+            return END
         if patient_exists_by_user_code(
                 user_code, doctor_code='034ВВП'):
             try:
@@ -105,8 +109,7 @@ class DoctorJob(ConversationHandler):
                 logging.info(ex)
         else:
             update.message.reply_text(
-                'Пациента с таким кодом не существует или у вас нет прав'
-                ' для просмотра.')
+                'Пациента с таким кодом не существует')
         return END
 
     @staticmethod

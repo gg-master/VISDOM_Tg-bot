@@ -9,8 +9,8 @@ from telegram.ext import (CallbackContext, CallbackQueryHandler,
 from db_api import (change_patients_membership, get_patient_by_user_code,
                     make_file_by_patient_user_code, make_file_patients,
                     make_patient_list, patient_exists_by_user_code)
-from modules.dialogs_shortcuts.start_shortcuts import (END, EXCLUDE_PATIENT,
-                                                       SEND_USER_DATA_PAT)
+from modules.dialogs_shortcuts.start_shortcuts import\
+    END, EXCLUDE_PATIENT, SEND_USER_DATA_PAT
 from modules.patient_list import patient_list
 from tools.decorators import registered_regions
 
@@ -87,10 +87,14 @@ class RegionJob(ConversationHandler):
     @registered_regions
     def send_user_data(update: Update, context: CallbackContext):
         user_code = update.message.text
+        if not user_code.startswith(context.user_data['user_code']):
+            update.message.reply_text('У вас нет прав для просмотра'
+                                      ' статистики этого пациента')
+            return END
         if patient_exists_by_user_code(user_code):
             try:
-                make_file_by_patient_user_code(user_code)
-
+                make_file_by_patient_user_code(
+                    user_code, region_code=context.user_data['user_code'])
                 update.effective_chat.send_document(
                     open(f'static/{user_code}_data.xlsx', 'rb'))
 
@@ -112,10 +116,14 @@ class RegionJob(ConversationHandler):
     @registered_regions
     def exclude_patient(update: Update, context: CallbackContext):
         user_code = update.message.text
+        if not user_code.startswith(context.user_data['user_code']):
+            update.message.reply_text('У вас нет прав для исключения'
+                                      ' этого пациента из исследования')
+            return END
         patient = get_patient_by_user_code(user_code)
         try:
             if patient:
-                change_patients_membership(user_code, False)
+                change_patients_membership(user_code)
 
                 patient_list[patient.chat_id].change_membership(context)
                 logging.info(f'Patient {user_code}-{patient.chat_id} EXCLUDE')
@@ -125,6 +133,34 @@ class RegionJob(ConversationHandler):
                                      'Если это ошибка, обратитесь к врачу.')
                 update.message.reply_text(f'Пациент {user_code} был исключен '
                                           f'из исследования.')
+            else:
+                update.message.reply_text(
+                    'Пациента с таким кодом не существует.')
+        except error.Unauthorized:
+            pass
+        return END
+
+    @staticmethod
+    @registered_regions
+    def include_patient(update: Update, context: CallbackContext):
+        user_code = update.message.text
+        if not user_code.startswith(context.user_data['user_code']):
+            update.message.reply_text('У вас нет прав для исключения'
+                                      ' этого пациента из исследования')
+            return END
+        patient = get_patient_by_user_code(user_code)
+        try:
+            if patient:
+                change_patients_membership(user_code)
+
+                patient_list[patient.chat_id].change_membership(context)
+                logging.info(f'Patient {user_code}-{patient.chat_id} EXCLUDE')
+
+                context.bot.send_message(
+                    patient.chat_id, 'Вы были включены в исследование.\n'
+                                     'Если это ошибка, обратитесь к врачу.')
+                update.message.reply_text(f'Пациент {user_code} был всключен '
+                                          f'в исследование.')
             else:
                 update.message.reply_text(
                     'Пациента с таким кодом не существует.')

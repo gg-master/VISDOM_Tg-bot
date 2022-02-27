@@ -193,25 +193,32 @@ def patient_exists_by_user_code(user_code,
     return None
 
 
-def change_patients_membership(user_code: str, member: bool) -> None:
+def change_patients_membership(user_code: str) -> None:
     with db_session.create_session() as db_sess:
         patient = get_patient_by_user_code(user_code)
-        patient.member = member
+        patient.member = not patient.member
         db_sess.add(patient)
         db_sess.commit()
 
 
-def make_file_by_patient_user_code(user_code):
+def make_file_by_patient_user_code(user_code,
+                                   doctor_code=None, region_code=None):
     if not os.path.isdir("static"):
         os.mkdir("static")
-    with db_session.create_session() as db_sess:
-        records = db_sess.execute(f"""SELECT record.sys_press,
+    response = f"""SELECT record.sys_press,
                   record.dias_press, record.heart_rate, record.time,
                   record.time_zone, record.response_time, record.comment FROM
                   patient JOIN accept_time on patient.id = 
                   accept_time.Patient_id JOIN record on accept_time.id = 
                   record.accept_time_id WHERE patient.user_code like 
-                  '{user_code}'""")
+                  '{user_code}'"""
+    if region_code or doctor_code:
+        if region_code:
+            response += f" and patient.user_code LIKE '{region_code}%'"
+        elif doctor_code:
+            response += f" and patient.user_code LIKE '{doctor_code}%'"
+    with db_session.create_session() as db_sess:
+        records = db_sess.execute(response)
     headers = ['Систолическое давление', 'Диастолическое давление',
                'Частота сердечных сокращений',
                'Время приема таблеток и измерений', 'Часовой пояс',
@@ -228,7 +235,7 @@ def make_file_by_patient_user_code(user_code):
     wb.save(filename=f'static/{user_code}_data.xlsx')
 
 
-def make_file_patients(region_code=False, doctor_code=False):
+def make_file_patients(region_code=None, doctor_code=None):
     if not os.path.isdir("static"):
         os.mkdir("static")
     response = '''SELECT patient.id, patient.user_code,
@@ -242,7 +249,7 @@ def make_file_patients(region_code=False, doctor_code=False):
         if region_code:
             response += f" WHERE patient.user_code LIKE '{region_code}%'"
         elif doctor_code:
-            response += f" WHERE patient.user_code LIKE '___{doctor_code}%'"
+            response += f" WHERE patient.user_code LIKE '{doctor_code}%'"
     with db_session.create_session() as db_sess:
         records = db_sess.execute(response)
     # wb = Workbook()
@@ -268,7 +275,7 @@ def make_file_patients(region_code=False, doctor_code=False):
     # wb.save(filename='static/statistics.xlsx')
 
 
-def make_patient_list(region_code=False, doctor_code=False):
+def make_patient_list(region_code=None, doctor_code=None):
     if not os.path.isdir("static"):
         os.mkdir("static")
     with db_session.create_session() as db_sess:
@@ -282,7 +289,7 @@ def make_patient_list(region_code=False, doctor_code=False):
         else:
             patients_user_codes = db_sess.query(
                 Patient.user_code, Patient.member) \
-                .filter(Patient.user_code.like(f"___{doctor_code}%")).all()
+                .filter(Patient.user_code.like(f"{doctor_code}%")).all()
 
     wb = Workbook()
     ws = wb.active

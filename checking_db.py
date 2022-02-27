@@ -39,8 +39,9 @@ def main() -> None:
     #            comment='custom', accept_time_id=184)
     # make_file_patients()
     # make_patient_list()
-    record = get_last_record_by_accept_time(accept_times[0].id)
-    print(record.response_time)
+    # record = get_last_record_by_accept_time(accept_times[0].id)
+    # print(record.response_time)
+    make_patient_list(doctor_code='ВВП')
 
 
 
