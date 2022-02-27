@@ -81,7 +81,7 @@ class StartDialog(ConversationHandler):
                                   callback_data=f'{SIGN_UP_AS_DOCTOR}')
              ],
             [InlineKeyboardButton(text='Я сотрудник',
-                                  callback_data=f'{SIGH_UP_AS_REGION}'),
+                                  callback_data=f'{SIGN_UP_AS_REGION}'),
              InlineKeyboardButton(text='ВолгГМУ',
                                   callback_data=f'{SIGN_UP_AS_UNIVERSITY}')
              ]
@@ -742,7 +742,7 @@ class DoctorRegistrationDialog(ConversationHandler):
 
 class RegionRegistrationDialog(DoctorRegistrationDialog):
     def __init__(self):
-        super().__init__(patt=f'^{SIGH_UP_AS_REGION}$')
+        super().__init__(patt=f'^{SIGN_UP_AS_REGION}$')
 
     @staticmethod
     @not_registered_users
