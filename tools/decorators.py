@@ -53,15 +53,24 @@ def _parametrized(dec):
 
 
 @_parametrized
-def registered_patronages(func, *d_args, **d_kwargs):
+def registered_patronages(func, abstract=True, *d_args, **d_kwargs):
     def decorator(update: Update, context: CallbackContext, *args, **kwargs):
         from modules.users_classes import DoctorUser, RegionUser, UniUser
+        from modules.patronage_dialogs import DoctorJob, RegionJob, UniJob
         user = context.user_data.get('user')
 
         dec_args = [DoctorUser, RegionUser, UniUser] if not d_args else d_args
 
         if type(user) in dec_args and user.registered():
-            return func(update, context, *args, **kwargs)
+            # Перенаправляем вызов в определенный класс
+            if abstract:
+                dct = {DoctorUser: DoctorJob,
+                       RegionUser: RegionJob,
+                       UniUser: UniJob}
+
+                return getattr(dct[type(user)], func.__name__)(update, context,
+                                                               *args, **kwargs)
+            return func(update, context)
         return unavailable_for_user(update)
     return decorator
 
