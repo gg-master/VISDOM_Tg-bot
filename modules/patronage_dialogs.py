@@ -75,6 +75,7 @@ class BaseJob(ConversationHandler):
             update.message.reply_text('У вас нет прав для просмотра'
                                       ' статистики этого пациента')
             return END
+
         if patient_exists_by_user_code(user_code):
             try:
                 make_file_by_patient_user_code(user_code)
@@ -139,28 +140,20 @@ class BaseJob(ConversationHandler):
     @staticmethod
     @registered_patronages()
     def send_users_data(update: Update, context: CallbackContext):
-        user_code = update.message.text
-        if not user_code.startswith(context.user_data['user'].code):
-            update.message.reply_text('У вас нет прав для просмотра'
-                                      ' статистики этого пациента')
-            return END
-        if patient_exists_by_user_code(user_code):
-            try:
-                make_file_by_patient_user_code(user_code)
-                update.effective_chat.send_document(
-                    open(f'static/{user_code}_data.xlsx', 'rb'))
-                remove(f'static/{user_code}_data.xlsx')
-            except FileNotFoundError as ex:
-                logging.info(ex)
-                update.message.reply_text(
-                    'Файл не найден. Обратитесь к администратору.')
-            except error.Unauthorized:
-                return END
-            except Exception as ex:
-                logging.info(ex)
-        else:
-            update.message.reply_text(
-                'Пациента с таким кодом не существует')
+        make_file_patients(user_code=context.user_data['user'].code)
+        try:
+            update.effective_chat.send_document(
+                open('static/statistics.csv', 'rb'))
+            remove('static/statistics.csv')
+        except FileNotFoundError as ex:
+            logging.info(ex)
+            update.effective_chat.send_message(
+                'Файл не найден. Обратитесь к администратору.'
+            )
+        except error.Unauthorized:
+            pass
+        except Exception as ex:
+            logging.info(ex)
         return END
 
     @staticmethod
