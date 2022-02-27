@@ -9,7 +9,7 @@ class Patient(SqlAlchemyBase):
     id = sqlalchemy.Column(sqlalchemy.Integer, autoincrement=True,
                            primary_key=True)
     name = sqlalchemy.Column(sqlalchemy.String(45))
-    user_code = sqlalchemy.Column(sqlalchemy.String(45),
+    user_code = sqlalchemy.Column(sqlalchemy.String(10),
                                   unique=True)
     time_zone = sqlalchemy.Column(sqlalchemy.String(45))
     chat_id = sqlalchemy.Column(sqlalchemy.Integer, unique=True)

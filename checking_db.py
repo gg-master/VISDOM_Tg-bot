@@ -41,7 +41,8 @@ def main() -> None:
     # make_patient_list()
     # record = get_last_record_by_accept_time(accept_times[0].id)
     # print(record.response_time)
-    make_patient_list(doctor_code='ВВП')
+    # make_patient_list(doctor_code='ВВП')
+    create_session()
 
 
 

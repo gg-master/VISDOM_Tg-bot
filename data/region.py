@@ -8,6 +8,6 @@ class Region(SqlAlchemyBase):
     id = sqlalchemy.Column(sqlalchemy.Integer, autoincrement=True,
                            primary_key=True)
     chat_id = sqlalchemy.Column(sqlalchemy.Integer)
-    region_code = sqlalchemy.Column(sqlalchemy.Integer)
+    region_code = sqlalchemy.Column(sqlalchemy.String(3))
     doctor = orm.relation('Doctor', back_populates='region',
                           passive_deletes='all')

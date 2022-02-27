@@ -38,7 +38,7 @@ class BasicUser:
 
     def __init__(self, chat_id):
         self.chat_id = chat_id
-        self.code = None
+        self.code = ''
         self.is_registered = False
 
     def registered(self):

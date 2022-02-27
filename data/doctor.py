@@ -9,7 +9,7 @@ class Doctor(SqlAlchemyBase):
     id = sqlalchemy.Column(sqlalchemy.Integer, autoincrement=True,
                            primary_key=True)
     chat_id = sqlalchemy.Column(sqlalchemy.Integer)
-    doctor_code = sqlalchemy.Column(sqlalchemy.String(4))
+    doctor_code = sqlalchemy.Column(sqlalchemy.String(7))
     patient = orm.relation('Patient', back_populates='doctor',
                            passive_deletes='all')
     region_id = sqlalchemy.Column(sqlalchemy.Integer,

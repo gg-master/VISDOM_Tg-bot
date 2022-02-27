@@ -50,25 +50,62 @@ class BaseJob(ConversationHandler):
     @staticmethod
     @registered_patronages()
     def send_user_file(update: Update, context: CallbackContext):
-        pass
+        text = 'Введите код пациента'
+        try:
+            update.effective_chat.send_message(text)
+            return SEND_USER_DATA_PAT
+        except error.Unauthorized:
+            return END
 
     @staticmethod
     @registered_patronages(RegionUser, UniUser)
     def exclude_patient_state(update: Update, context: CallbackContext):
-        pass
+        text = 'Введите код пациента'
+        try:
+            update.effective_chat.send_message(text)
+            return EXCLUDE_PATIENT
+        except error.Unauthorized:
+            return END
 
     @staticmethod
     @registered_patronages()
     def send_user_data(update: Update, context: CallbackContext):
-        pass
+        user_code = context.user_data['user'].code + update.message.text
+        if not user_code.startswith(context.user_data['user'].code):
+            update.message.reply_text('У вас нет прав для просмотра'
+                                      ' статистики этого пациента')
+            return END
+        if patient_exists_by_user_code(user_code):
+            try:
+                make_file_by_patient_user_code(user_code)
+                update.effective_chat.send_document(
+                    open(f'static/{user_code}_data.xlsx', 'rb'))
+                remove(f'static/{user_code}_data.xlsx')
+            except FileNotFoundError as ex:
+                logging.info(ex)
+                update.message.reply_text(
+                    'Файл не найден. Обратитесь к администратору.')
+            except error.Unauthorized:
+                return END
+            except Exception as ex:
+                logging.info(ex)
+        else:
+            update.message.reply_text(
+                'Пациента с таким кодом не существует')
+        return END
 
     @staticmethod
+    @registered_patronages()
     def exclude_patient(update: Update, context: CallbackContext):
         user_code = update.message.text
+        if not user_code.startswith(context.user_data['user'].code):
+            update.message.reply_text('У вас нет прав для просмотра'
+                                      ' статистики этого пациента')
+            return END
         patient = get_patient_by_user_code(user_code)
         try:
             if patient:
-                change_patients_membership(user_code, False)
+                change_patients_membership(user_code)
 
                 users_list[patient.chat_id].change_membership(context)
                 logging.info(f'Patient {user_code}-{patient.chat_id} EXCLUDE')
@@ -86,7 +123,7 @@ class BaseJob(ConversationHandler):
         return END
 
     @staticmethod
-    @registered_patronages(DoctorUser, RegionUser, abstract=False)
+    @registered_patronages(DoctorUser, RegionUser)
     def alarm_send_p_data(update: Update, context: CallbackContext):
         data = update.callback_query.data
         user_code = data[data.find('&') + 1:]
@@ -102,12 +139,48 @@ class BaseJob(ConversationHandler):
     @staticmethod
     @registered_patronages()
     def send_users_data(update: Update, context: CallbackContext):
-        pass
+        user_code = update.message.text
+        if not user_code.startswith(context.user_data['user'].code):
+            update.message.reply_text('У вас нет прав для просмотра'
+                                      ' статистики этого пациента')
+            return END
+        if patient_exists_by_user_code(user_code):
+            try:
+                make_file_by_patient_user_code(user_code)
+                update.effective_chat.send_document(
+                    open(f'static/{user_code}_data.xlsx', 'rb'))
+                remove(f'static/{user_code}_data.xlsx')
+            except FileNotFoundError as ex:
+                logging.info(ex)
+                update.message.reply_text(
+                    'Файл не найден. Обратитесь к администратору.')
+            except error.Unauthorized:
+                return END
+            except Exception as ex:
+                logging.info(ex)
+        else:
+            update.message.reply_text(
+                'Пациента с таким кодом не существует')
+        return END
 
     @staticmethod
     @registered_patronages()
     def send_patients_list(update: Update, context: CallbackContext):
-        pass
+        make_patient_list(user_code=context.user_data['user'].code)
+        try:
+            update.effective_chat.send_document(
+                open('static/Список пациентов.xlsx', 'rb'))
+            remove('static/Список пациентов.xlsx')
+        except FileNotFoundError as ex:
+            logging.info(ex)
+            update.effective_chat.send_message(
+                'Файл не найден. Обратитесь к администратору.'
+            )
+        except error.Unauthorized:
+            pass
+        except Exception as ex:
+            logging.info(ex)
+        return END
 
     @staticmethod
     def stop(update: Update, context: CallbackContext):
@@ -141,75 +214,6 @@ class DoctorJob(BaseJob):
         except error.Unauthorized:
             pass
 
-    @staticmethod
-    def send_user_file(update: Update, context: CallbackContext):
-        text = 'Введите код пациента'
-        try:
-            update.effective_chat.send_message(text)
-            return SEND_USER_DATA_PAT
-        except error.Unauthorized:
-            return END
-
-    @staticmethod
-    def send_user_data(update: Update, context: CallbackContext):
-        user_code = update.message.text
-        if patient_exists_by_user_code(user_code):
-            try:
-                make_file_by_patient_user_code(user_code)
-
-                update.effective_chat.send_document(
-                    open(f'static/{user_code}_data.xlsx', 'rb'))
-
-                remove(f'static/{user_code}_data.xlsx')
-            except FileNotFoundError as ex:
-                logging.info(ex)
-                update.message.reply_text(
-                    'Файл не найден. Обратитесь к администратору.')
-            except error.Unauthorized:
-                return END
-            except Exception as ex:
-                logging.info(ex)
-        else:
-            update.message.reply_text(
-                'Пациента с таким кодом не существует')
-        return END
-
-    @staticmethod
-    def send_users_data(update: Update, context: CallbackContext):
-        make_file_patients()
-        try:
-            update.effective_chat.send_document(
-                open('static/statistics.csv', 'rb'))
-            remove('static/statistics.csv')
-        except FileNotFoundError as ex:
-            logging.info(ex)
-            update.effective_chat.send_message(
-                'Файл не найден. Обратитесь к администратору.'
-            )
-        except error.Unauthorized:
-            pass
-        except Exception as ex:
-            logging.info(ex)
-        return END
-
-    @staticmethod
-    def send_patients_list(update: Update, context: CallbackContext):
-        make_patient_list()
-        try:
-            update.effective_chat.send_document(
-                open('static/Список пациентов.xlsx', 'rb'))
-            remove('static/Список пациентов.xlsx')
-        except FileNotFoundError as ex:
-            logging.info(ex)
-            update.effective_chat.send_message(
-                'Файл не найден. Обратитесь к администратору.'
-            )
-        except error.Unauthorized:
-            pass
-        except Exception as ex:
-            logging.info(ex)
-        return END
-
 
 class RegionJob(BaseJob):
     @staticmethod
@@ -234,107 +238,6 @@ class RegionJob(BaseJob):
         except error.Unauthorized:
             pass
 
-    @staticmethod
-    def send_user_file(update: Update, context: CallbackContext):
-        text = 'Введите код пациента'
-        try:
-            update.effective_chat.send_message(text)
-            return SEND_USER_DATA_PAT
-        except error.Unauthorized:
-            return END
-
-    @staticmethod
-    def exclude_patient_state(update: Update, context: CallbackContext):
-        text = 'Введите код пациента'
-        try:
-            update.effective_chat.send_message(text)
-            return EXCLUDE_PATIENT
-        except error.Unauthorized:
-            return END
-
-    @staticmethod
-    def send_user_data(update: Update, context: CallbackContext):
-        user_code = update.message.text
-        if patient_exists_by_user_code(user_code):
-            try:
-                make_file_by_patient_user_code(user_code)
-
-                update.effective_chat.send_document(
-                    open(f'static/{user_code}_data.xlsx', 'rb'))
-
-                remove(f'static/{user_code}_data.xlsx')
-            except FileNotFoundError as ex:
-                logging.info(ex)
-                update.message.reply_text(
-                    'Файл не найден. Обратитесь к администратору.')
-            except error.Unauthorized:
-                return END
-            except Exception as ex:
-                logging.info(ex)
-        else:
-            update.message.reply_text(
-                'Пациента с таким кодом не существует')
-        return END
-
-    @staticmethod
-    def exclude_patient(update: Update, context: CallbackContext):
-        user_code = update.message.text
-        patient = get_patient_by_user_code(user_code)
-        try:
-            if patient:
-                change_patients_membership(user_code, False)
-
-                users_list[patient.chat_id].change_membership(context)
-                logging.info(f'Patient {user_code}-{patient.chat_id} EXCLUDE')
-
-                context.bot.send_message(
-                    patient.chat_id, 'Вы были исключны из исследования.\n'
-                                     'Если это ошибка, обратитесь к врачу.')
-                update.message.reply_text(f'Пациент {user_code} был исключен '
-                                          f'из исследования.')
-            else:
-                update.message.reply_text(
-                    'Пациента с таким кодом не существует.')
-        except error.Unauthorized:
-            pass
-        return END
-
-    @staticmethod
-    def send_users_data(update: Update, context: CallbackContext):
-        make_file_patients()
-        try:
-            update.effective_chat.send_document(
-                open('static/statistics.csv', 'rb'))
-            remove('static/statistics.csv')
-        except FileNotFoundError as ex:
-            logging.info(ex)
-            update.effective_chat.send_message(
-                'Файл не найден. Обратитесь к администратору.'
-            )
-        except error.Unauthorized:
-            pass
-        except Exception as ex:
-            logging.info(ex)
-        return END
-
-    @staticmethod
-    def send_patients_list(update: Update, context: CallbackContext):
-        make_patient_list()
-        try:
-            update.effective_chat.send_document(
-                open('static/Список пациентов.xlsx', 'rb'))
-            remove('static/Список пациентов.xlsx')
-        except FileNotFoundError as ex:
-            logging.info(ex)
-            update.effective_chat.send_message(
-                'Файл не найден. Обратитесь к администратору.'
-            )
-        except error.Unauthorized:
-            pass
-        except Exception as ex:
-            logging.info(ex)
-        return END
-
 
 class UniJob(BaseJob):
     @staticmethod
@@ -358,103 +261,3 @@ class UniJob(BaseJob):
         except error.Unauthorized:
             pass
 
-    @staticmethod
-    def send_user_file(update: Update, context: CallbackContext):
-        text = 'Введите код пациента'
-        try:
-            update.effective_chat.send_message(text)
-            return SEND_USER_DATA_PAT
-        except error.Unauthorized:
-            return END
-
-    @staticmethod
-    def exclude_patient_state(update: Update, context: CallbackContext):
-        text = 'Введите код пациента'
-        try:
-            update.effective_chat.send_message(text)
-            return EXCLUDE_PATIENT
-        except error.Unauthorized:
-            return END
-
-    @staticmethod
-    def send_user_data(update: Update, context: CallbackContext):
-        user_code = update.message.text
-        if patient_exists_by_user_code(user_code):
-            try:
-                make_file_by_patient_user_code(user_code)
-
-                update.effective_chat.send_document(
-                    open(f'static/{user_code}_data.xlsx', 'rb'))
-
-                remove(f'static/{user_code}_data.xlsx')
-            except FileNotFoundError as ex:
-                logging.info(ex)
-                update.message.reply_text(
-                    'Файл не найден. Обратитесь к администратору.')
-            except error.Unauthorized:
-                return END
-            except Exception as ex:
-                logging.info(ex)
-        else:
-            update.message.reply_text(
-                'Пациента с таким кодом не существует')
-        return END
-
-    @staticmethod
-    def exclude_patient(update: Update, context: CallbackContext):
-        user_code = update.message.text
-        patient = get_patient_by_user_code(user_code)
-        try:
-            if patient:
-                change_patients_membership(user_code, False)
-
-                users_list[patient.chat_id].change_membership(context)
-                logging.info(f'Patient {user_code}-{patient.chat_id} EXCLUDE')
-
-                context.bot.send_message(
-                    patient.chat_id, 'Вы были исключны из исследования.\n'
-                                     'Если это ошибка, обратитесь к врачу.')
-                update.message.reply_text(f'Пациент {user_code} был исключен '
-                                          f'из исследования.')
-            else:
-                update.message.reply_text(
-                    'Пациента с таким кодом не существует.')
-        except error.Unauthorized:
-            pass
-        return END
-
-    @staticmethod
-    def send_users_data(update: Update, context: CallbackContext):
-        make_file_patients()
-        try:
-            update.effective_chat.send_document(
-                open('static/statistics.csv', 'rb'))
-            remove('static/statistics.csv')
-        except FileNotFoundError as ex:
-            logging.info(ex)
-            update.effective_chat.send_message(
-                'Файл не найден. Обратитесь к администратору.'
-            )
-        except error.Unauthorized:
-            pass
-        except Exception as ex:
-            logging.info(ex)
-        return END
-
-    @staticmethod
-    def send_patients_list(update: Update, context: CallbackContext):
-        make_patient_list()
-        try:
-            update.effective_chat.send_document(
-                open('static/Список пациентов.xlsx', 'rb'))
-            remove('static/Список пациентов.xlsx')
-        except FileNotFoundError as ex:
-            logging.info(ex)
-            update.effective_chat.send_message(
-                'Файл не найден. Обратитесь к администратору.'
-            )
-        except error.Unauthorized:
-            pass
-        except Exception as ex:
-            logging.info(ex)
-        return END
