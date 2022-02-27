@@ -17,12 +17,11 @@ class Restore:
 
         # Восстановление всех пациентов, которые зарегистрированны и участвуют
         self.restore_all_patients()
-
-        # Восстановление патронажа
+        # Восстановление врачей
         self.restore_all_doctors(self.context)
-
+        # Восстановление регионов
         self.restore_all_regions(self.context)
-
+        # Восстановление университета
         self.restore_all_uni(self.context)
 
     def restore_all_patients(self):
@@ -75,7 +74,6 @@ class Restore:
             user.restore()
 
             Restore.restore_uni_msg(context, chat_id=user.chat_id)
-
 
     @staticmethod
     def restore_patient_msg(context, **kwargs):
@@ -164,6 +162,9 @@ def patient_restore_handler(update: Update, context: CallbackContext):
     # Устанавливаем в контекст ранее созданный объект пациента
     user = context.user_data['user'] = users_list[update.effective_chat.id]
 
+    if not user:
+        return
+
     logging.info(f'RESTORED PATIENT: {user.chat_id}')
 
     # Если уже пришло уведомление, то переотправляем его после восстановления
@@ -206,6 +207,8 @@ def doctor_restore_handler(update: Update, context: CallbackContext):
     from modules.patronage_dialogs import DoctorJob
 
     doc = context.user_data['user'] = users_list[update.effective_chat.id]
+    if not doc:
+        return
     logging.info(f'RESTORED DOCTOR: {doc.chat_id}')
     try:
         update.callback_query.delete_message()
@@ -222,8 +225,12 @@ def doctor_restore_handler(update: Update, context: CallbackContext):
 def region_restore_handler(update: Update, context: CallbackContext):
     from modules.patronage_dialogs import RegionJob
 
-    doc = context.user_data['user'] = users_list[update.effective_chat.id]
-    logging.info(f'RESTORED REGION: {doc.chat_id}')
+    reg = context.user_data['user'] = users_list[update.effective_chat.id]
+
+    if not reg:
+        return
+
+    logging.info(f'RESTORED REGION: {reg.chat_id}')
     try:
         update.callback_query.delete_message()
         update.effective_chat.send_message('Доступ восстановлен.')
@@ -239,8 +246,12 @@ def region_restore_handler(update: Update, context: CallbackContext):
 def uni_restore_handler(update: Update, context: CallbackContext):
     from modules.patronage_dialogs import UniJob
 
-    doc = context.user_data['user'] = users_list[update.effective_chat.id]
-    logging.info(f'RESTORED UNI: {doc.chat_id}')
+    uni = context.user_data['user'] = users_list[update.effective_chat.id]
+
+    if not uni:
+        return
+
+    logging.info(f'RESTORED UNI: {uni.chat_id}')
     try:
         update.callback_query.delete_message()
         update.effective_chat.send_message('Доступ восстановлен.')

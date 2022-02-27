@@ -27,6 +27,20 @@ from tools.tools import convert_tz
 db_session.global_init()
 db_sess = db_session.create_session()
 
+# Форматы паттернов
+# Паттерн региона
+region_code = r'\d{2,3}'
+
+# Паттерн врача
+doctor_name = r'[a-zA-Zа-яА-ЯёЁ]{3}'
+doctor_num = r'\d?'
+doctor_code = f'{doctor_name}{doctor_num}'
+
+# Паттерн пациента
+pat_name = r'[a-zA-Zа-яА-ЯёЁ]{3}'
+pat_num = r'\d*'
+pat_code = f'{pat_name}{pat_num}'
+
 
 class BasicUser:
     USER_EXCLUDED = 0
@@ -49,7 +63,7 @@ class BasicUser:
 
     def check_user_reg(self):
         # Проверяем сначала список, чтобы не тратить время на запрос в бд
-        user_from_list = users_list.get(self.chat_id)
+        user_from_list = users_list[self.chat_id]
 
         if user_from_list:
             if type(user_from_list) is PatientUser:
@@ -92,10 +106,10 @@ class PatientTimes:
             self.times = {k: self.default_times[k].replace(
                 hour=times[k].hour, minute=times[k].minute) for k in
                 times.keys()}
+            self.orig_t = self.times.copy()
         else:
             self.times = self.default_times.copy()
-
-        self.orig_t = self.times.copy()
+            self.orig_t = None
 
     def s_times(self):
         return dict(map(lambda x: (x, self.times[x].strftime("%H:%M")),
@@ -168,15 +182,24 @@ class PatientUser(BasicUser):
         'MOR': [PillTakingDialog, DataCollectionDialog],
         'EVE': [DataCollectionDialog]
     }
-    doctor_patt = r'^\d{2,3}([a-zA-Zа-яА-ЯёЁ]{3}\d?)[a-zA-Zа-яА-ЯёЁ]{3}\d*$'
-    region_patt = r'^(\d{2,3})[a-zA-Zа-яА-ЯёЁ]{3}\d?[a-zA-Zа-яА-ЯёЁ]{3}\d*$'
+    # Паттыерн для вроверки формата кода
+    code_pat = f'^{region_code}{doctor_code}{pat_code}$'
+    # Паттерн для отделения цифр у пользователя из кода (при наличии)
+    univ_code_pat = f'^({region_code}{doctor_code}{pat_name}){pat_num}$'
+    # Паттерн для получения только цифр пользователя из кода
+    usr_code_num_pat = f'^{region_code}{doctor_code}{pat_name}({pat_num})$'
+
+    # Паттерны для получения каждой из частей кода (региона, врача, пациента)
+    user_pat = f'^{region_code}{doctor_code}({pat_code})$'
+    doctor_pat = f'^{region_code}({doctor_code}){pat_code}$'
+    region_pat = f'^({region_code}){doctor_code}{pat_code}$'
 
     def __init__(self, chat_id: int):
         super().__init__(chat_id)
-        self.doctor_id = None
         self.member = True
 
-        self.accept_times = None
+        self.accept_times = self.doctor_id = None
+
         self.p_loc = PatientLocation()
         self.times = PatientTimes()
 
@@ -196,15 +219,13 @@ class PatientUser(BasicUser):
 
     def set_code(self, code):
         # Код не подходит по патерну, то вызываем ошибку
-        if not re.match(r'^\d{2,3}[a-zA-Zа-яА-ЯёЁ]{3}'
-                        r'\d?[a-zA-Zа-яА-ЯёЁ]{3}\d*$', code):
+        if not re.match(self.code_pat, code):
             raise ValueError()
         self.code = code
 
     def validate_code(self):
         # Получаем код пациента без цифр в конце
-        univ_code = re.findall(r'^(\d{2,3}[a-zA-Zа-яА-ЯёЁ]{3}\d?'
-                               r'[a-zA-Zа-яА-ЯёЁ]{3})\d*$', self.code)[0]
+        univ_code = re.findall(self.univ_code_pat, self.code)[0]
 
         # Получаем всех пациентов, у которых одинаково ФИО
         patients = get_all_patients_by_user_code(univ_code)
@@ -212,30 +233,27 @@ class PatientUser(BasicUser):
         if patients and any(map(lambda x: x.user_code == self.code, patients)):
             # Добавляем цифры к коду, если совпали
             advise_code = univ_code + str(int('0' + re.findall(
-                r'^\d{2,3}[a-zA-Zа-яА-ЯёЁ]{3}\d?[a-zA-Zа-яА-ЯёЁ]{3}(\d*)$',
-                patients[-1].user_code)[0]) + 1)
+                self.usr_code_num_pat, patients[-1].user_code)[0]) + 1)
             raise UserExists(
                 f'Ваш код совпал с кем-то. Измените Ваш код.\n'
                 f'Рекомендуем использовать код: {advise_code}',
                 advise_code
             )
 
-        # Из user_code вытаскиваем код врача
-        region_code = re.findall(self.region_patt,
-                                 self.code)[0].rjust(3, '0')
-        doctor_code = re.findall(self.doctor_patt,
-                                 self.code)[0]
-        doc = get_doctor_by_code(region_code + doctor_code)
+        # Разделяем введенный код на части
+        r_code = re.findall(self.region_pat, self.code)[0].rjust(3, '0')
+        d_code = re.findall(self.doctor_pat, self.code)[0]
+        u_code = re.findall(self.user_pat, self.code)[0]
+
+        doc = get_doctor_by_code(r_code + d_code)
         if not doc:
             raise DoctorNotFound(f'Ваш доктор не найден. Проверьте Ваш код.')
 
-        if not get_region_by_code(region_code):
+        if not get_region_by_code(r_code):
             raise RegionNotFound('Ваш регион не найден. Проверьте Ваш код.')
+
         self.doctor_id = doc.id
-        user_code = re.findall(
-            r'^\d{2,3}[a-zA-Zа-яА-ЯёЁ]{3}\d?([a-zA-Zа-яА-ЯёЁ]{3}\d*)$',
-            self.code)[0]
-        self.code = region_code + doctor_code + user_code
+        self.code = r_code + d_code + u_code
 
     def change_membership(self, context: CallbackContext):
         self.member = False
@@ -413,7 +431,6 @@ class PatientUser(BasicUser):
         self.save_updating(context, check_user=False)
 
     def save_patient_record(self):
-        # print(self.data_response)
         self.alarmed[self.state()[0]] = False
         Thread(target=self._threading_save_record).start()
 
@@ -448,11 +465,15 @@ class PatientUser(BasicUser):
             days = int(mor_record[1] / 24) if self.alarmed['MOR'] \
                 else int(eve_record[1] / 24)
 
+            # Получаем ФИО врача и номер региона, чтобы взять врача из бд
+            doc = re.findall(self.doctor_pat, self.code)[0]
+            region = re.findall(self.region_pat, self.code)[0]
+
             # Ежедневное уведомление для доктора
             DoctorUser.send_alarm(
                 context=context,
                 user=self,
-                doctor_code=re.findall(self.doctor_patt, self.code)[0],
+                doctor_code=region + doc,
                 days=days
             )
 
@@ -461,7 +482,7 @@ class PatientUser(BasicUser):
                 RegionUser.send_alarm(
                     context=context,
                     user=self,
-                    doctor_code=re.findall(self.doctor_patt, self.code)[0],
+                    doctor_code=region + doc,
                     days=days
                 )
 
@@ -483,40 +504,50 @@ class PatientUser(BasicUser):
 
 
 class DoctorUser(BasicUser):
+    # Паттыерн для вроверки формата кода
+    code_pat = f'^{region_code}{doctor_code}$'
+    # Паттерн для отделения цифр у врача из кода (при наличии)
+    univ_code_pat = f'^({region_code}{doctor_name}){doctor_num}$'
+    # Паттерн для получения только цифр врача из кода
+    doc_code_num_pat = f'^{region_code}{doctor_name}({doctor_num})$'
+
+    # Паттерны для получения каждой из частей кода (региона, врача)
+    doctor_pat = f'^{region_code}({doctor_code})$'
+    region_pat = f'^({region_code}){doctor_code}$'
+
     def __init__(self, chat_id):
         super().__init__(chat_id)
         self.region_id = None
 
     def set_code(self, code):
         # Код не подходит по патерну, то вызываем ошибку
-        if not re.match(r'^\d{2,3}[a-zA-Zа-яА-ЯёЁ]{3}\d?$', code):
+        if not re.match(self.code_pat, code):
             raise ValueError('Код введен в неправильном формате.')
         self.code = code
 
     def validate_code(self):
         # Получаем код врача без цифр в конце
-        univ_code = re.findall(r'^(\d{2,3}[a-zA-Zа-яА-ЯёЁ]{3})\d?$',
-                               self.code)[0]
+        univ_code = re.findall(self.univ_code_pat, self.code)[0]
         # Получаем всех врачей, у которых одинаково ФИО
         doctors = get_all_doctors_by_user_code(univ_code)
 
         if doctors and any(map(lambda x: x.doctor_code == self.code, doctors)):
             # Добавляем цифры к коду, если совпали
             advise_code = univ_code + str(int('0' + re.findall(
-               r'^[a-zA-Zа-яА-ЯёЁ]{3}(\d?)$', doctors[-1].doctor_code)[0]) + 1)
+               self.doc_code_num_pat, doctors[-1].doctor_code)[0]) + 1)
             raise UserExists(
                 f'Ваш код совпал с кем-то. Измените Ваш код.\n'
                 f'Рекомендуем использовать код: {advise_code}',
                 advise_code
             )
-        region_code = re.findall(r'^(\d{2,3})[a-zA-Zа-яА-ЯёЁ]{3}\d?$',
-                                 self.code)[0].rjust(3, '0')
-        region = get_region_by_code(region_code)
+        r_code = re.findall(self.region_pat, self.code)[0].rjust(3, '0')
 
+        region = get_region_by_code(r_code)
         if not region:
             raise RegionNotFound('Ваш регион не найден. Проверьте Ваш код.')
 
         self.region_id = region.id
+        self.code = r_code + re.findall(self.doctor_pat, self.code)[0]
 
     def register(self, update: Update, context: CallbackContext):
         super().register()
@@ -562,9 +593,12 @@ class DoctorUser(BasicUser):
 
 
 class RegionUser(BasicUser):
+    # Паттыерн для вроверки формата кода
+    code_pat = f'^{region_code}$'
+
     def set_code(self, code):
         # Код не подходит по патерну, то вызываем ошибку
-        if not re.match(r'^\d{2,3}$', code):
+        if not re.match(self.code_pat, code):
             raise ValueError('Код введен в неправильном формате.')
         self.code = code
 
