@@ -44,11 +44,11 @@ def restore_repeating_task(user, context: CallbackContext, **kwargs):
     # Проверяем время в которое произошел рестарт.
     # Если рестар был между лимитами определенного уведомления, то
     # восстанавливаем репитер, чтобы отправить уведомление
-    now = dt.datetime.now(tz=user.tz).time()
-    first = user.tz.localize(user.time_limiters[state_name][0])
-    last = user.tz.localize(user.time_limiters[state_name][1])
+    now = dt.datetime.now(tz=user.p_loc.tz).time()
+    first = user.p_loc.tz.localize(user.times.time_limiters[state_name][0])
+    last = user.p_loc.tz.localize(user.times.time_limiters[state_name][1])
 
-    if now < user.tz.localize(user.times[state_name]).time() or \
+    if now < user.p_loc.tz.localize(user.times[state_name]).time() or \
             now > last.time():
         return None
 
@@ -122,14 +122,13 @@ def daily_task(context: CallbackContext):
         user.notification_states[data['name']][
             user.state()[1]].pre_start(context, data)
 
-        n = dt.datetime.now(tz=user.tz).time()
-        f = user.tz.localize(user.time_limiters[data['name']][0])
+        n = dt.datetime.now(tz=user.p_loc.tz).time()
+        f = user.p_loc.tz.localize(user.times.time_limiters[data['name']][0])
 
         context.job_queue.run_repeating(
             callback=repeating_task,
             interval=data['task_data']['interval'],
-            first=PatientUser.calc_start_time(
-                n, f, data['task_data']['interval']),
+            first=calc_start_time(n, f, data['task_data']['interval']),
             last=data['task_data']['last'],
             context=data,
             name=f'{user.chat_id}-rep_task'

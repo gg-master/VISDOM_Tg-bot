@@ -159,7 +159,7 @@ class FindLocationDialog(ConversationHandler):
 
         elif (response and 'Да, верно' in response) or location:
             if location:
-                context.user_data['user'].location = Location(
+                context.user_data['user'].p_loc.location = Location(
                     location={'Нет адреса': [location.longitude,
                                              location.latitude]})
         if ret:
@@ -222,7 +222,7 @@ class FindLocationDialog(ConversationHandler):
             f'pt={",".join([toponym_longitude, toponym_lattitude])},vkbkm'
 
         # Запоминаем положение
-        context.user_data['user'].location = \
+        context.user_data['user'].p_loc.location = \
             Location(location={update.message.text: [toponym_longitude,
                                                      toponym_lattitude]})
 

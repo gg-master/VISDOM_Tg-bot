@@ -50,11 +50,11 @@ class SettingsDialog(ConversationHandler):
                'Чтобы сохранить изменения нажмите "Подтвердить"'
 
         text += f'\n\nВаши данные:' \
-                f'\nЧасовой пояс: {user.location}' \
+                f'\nЧасовой пояс: {user.p_loc.location}' \
                 f'\nВремя получения утреннего уведомления: ' \
-                f'{user.str_times()["MOR"]}\n' \
+                f'{user.times.s_times()["MOR"]}\n' \
                 f'Время получения вечернего уведомления: ' \
-                f'{user.str_times()["EVE"]}' \
+                f'{user.times.s_times()["EVE"]}' \
 
         buttons = [
             [
@@ -89,7 +89,7 @@ class SettingsDialog(ConversationHandler):
 
     @staticmethod
     def drop_notif_time(update: Update, context: CallbackContext):
-        res = context.user_data['user'].drop_notif_time()
+        res = context.user_data['user'].times.drop_times()
         if res:
             context.user_data[START_OVER] = True
             return SettingsDialog.start(update, context)
@@ -100,12 +100,7 @@ class SettingsDialog(ConversationHandler):
         update.callback_query.delete_message()
         try:
             context.user_data['user'].save_updating(context)
-            # print(context.job_queue.get_jobs_by_name(
-            #     f'{context.user_data["user"].chat_id}-EVE')[0].next_t)
-            # job1 = context.job_queue.get_jobs_by_name(
-            #     f'{context.user_data["user"].chat_id}-rep_task')
-            # if job1:
-            #     print(job1[0].next_t))
+
             text = 'Изменения сохранены.'
             update.effective_chat.send_message(
                 text=text,
@@ -170,9 +165,9 @@ class SettingsConfNotifTimeDialog(ConfigureNotifTimeDialog):
     def start(update: Update, context: CallbackContext, *args):
         text = f'Настройте время получения напоминаний (время МЕСТНОЕ)\n\n' \
                f'Время получения утреннего уведомления: ' \
-               f'{context.user_data["user"].str_times()["MOR"]}\n' \
+               f'{context.user_data["user"].times.s_times()["MOR"]}\n' \
                f'Время получения вечернего уведомления: ' \
-               f'{context.user_data["user"].str_times()["EVE"]}'
+               f'{context.user_data["user"].times.s_times()["EVE"]}'
         return ConfigureNotifTimeDialog.start(update, context, text)
 
     @staticmethod

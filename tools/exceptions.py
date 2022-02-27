@@ -1,4 +1,4 @@
-class PatientExists(Exception):
+class UserExists(Exception):
     pass
 
 

@@ -6,10 +6,12 @@ from telegram.ext import (CallbackQueryHandler, CommandHandler, Defaults,
                           Filters, MessageHandler, Updater, CallbackContext)
 
 from modules.notification_dailogs import DataCollectionDialog, PillTakingDialog
+from modules.patronage_dialogs import BaseJob
 from modules.restore import (Restore, patient_restore_handler,
-                             doctor_restore_handler)
+                             doctor_restore_handler, region_restore_handler,
+                             uni_restore_handler)
 from modules.settings_dialogs import SettingsDialog
-from modules.start_dialogs import DoctorJob, StartDialog
+from modules.start_dialogs import StartDialog
 
 from tools.tools import get_from_env
 
@@ -51,7 +53,9 @@ def main():
         os.mkdir("static")
 
     updater = Updater(get_from_env('TOKEN'),
-                      use_context=True, defaults=Defaults(run_async=True))
+                      use_context=True, defaults=Defaults(run_async=True),
+                      request_kwargs={'read_timeout': 10,
+                                      'connect_timeout': 10})
 
     dp = updater.dispatcher
 
@@ -65,12 +69,16 @@ def main():
 
     dp.add_handler(SettingsDialog())
 
-    dp.add_handler(DoctorJob())
+    dp.add_handler(BaseJob())
 
     dp.add_handler(CallbackQueryHandler(patient_restore_handler,
                                         pattern='^RESTORE_PATIENT$'))
     dp.add_handler(CallbackQueryHandler(doctor_restore_handler,
                                         pattern='^RESTORE_DOCTOR$'))
+    dp.add_handler(CallbackQueryHandler(region_restore_handler,
+                                        pattern='^RESTORE_REGION$'))
+    dp.add_handler(CallbackQueryHandler(uni_restore_handler,
+                                        pattern='^RESTORE_UNI$'))
 
     dp.add_handler(CommandHandler("help", help_msg))
     dp.add_handler(MessageHandler(Filters.regex('Справка$'), help_msg))
