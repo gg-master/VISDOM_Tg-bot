@@ -168,7 +168,7 @@ def patient_restore_handler(update: Update, context: CallbackContext):
     # Устанавливаем в контекст ранее созданный объект пациента
     user = context.user_data['user'] = users_list[update.effective_chat.id]
 
-    if not user:
+    if not user or not user.member:
         return
 
     logging.info(f'RESTORED PATIENT: {user.chat_id}')
