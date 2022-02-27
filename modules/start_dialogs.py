@@ -238,8 +238,9 @@ class PatientRegistrationDialog(ConversationHandler):
     @staticmethod
     def conf_code(update: Update, context: CallbackContext):
         text = 'Введите Ваш персональный код.\n' \
-               'Формат: [КОД_региона (>2сим)][КОД_врача (3-4cим)]' \
-               '[КОД_пациента (>3сим)]'
+               'Формат: [Регион (2-3сим)][Врач (3-4cим)]' \
+               '[Пациент (>3сим)]\n' \
+               'Пример: 77АБВКАА'
 
         if not context.user_data.get(START_OVER):
             update.callback_query.answer()
@@ -684,7 +685,8 @@ class DoctorRegistrationDialog(ConversationHandler):
     @staticmethod
     def conf_code(update: Update, context: CallbackContext):
         text = 'Введите Ваш персональный код.\n' \
-               'Формат: [КОД_региона (>2сим)][КОД_врача (3-4сим)]'
+               'Формат: [Регион (2-3сим)][Врач (3-4cим)]\n' \
+               'Пример: 77АБВ'
 
         if not context.user_data.get(START_OVER):
             update.callback_query.answer()
@@ -783,7 +785,8 @@ class RegionRegistrationDialog(DoctorRegistrationDialog):
     @staticmethod
     def conf_code(update: Update, context: CallbackContext):
         text = 'Введите Ваш персональный код.\n' \
-               'Формат: [КОД_региона (>2сим)]'
+               'Формат: [Регион (2-3сим)]\n' \
+               'Пример: 77'
 
         if not context.user_data.get(START_OVER):
             update.callback_query.answer()

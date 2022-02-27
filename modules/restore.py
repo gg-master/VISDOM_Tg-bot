@@ -17,12 +17,11 @@ class Restore:
 
         # Восстановление всех пациентов, которые зарегистрированны и участвуют
         self.restore_all_patients()
-
-        # Восстановление патронажа
+        # Восстановление врачей
         self.restore_all_doctors(self.context)
-
+        # Восстановление регионов
         self.restore_all_regions(self.context)
-
+        # Восстановление университета
         self.restore_all_uni(self.context)
 
     def restore_all_patients(self):
@@ -40,17 +39,18 @@ class Restore:
             times={'MOR': accept_times[0].time, 'EVE': accept_times[1].time},
             accept_times={'MOR': accept_times[0].id, 'EVE': accept_times[1].id}
         )
-        # Восстановление обычных Daily тасков
-        p.recreate_notification(self.context)
-
-        # Восстановление цикличных тасков. Если для них соответствует время
-        p.restore_repeating_task(self.context)
-
         # Проверяем пациента на время последней записи
         p.check_user_records(self.context)
 
-        logging.info(f'RESTORED PATIENT NOTIFICATIONS: {p.chat_id}')
-        Restore.restore_patient_msg(self.context, chat_id=patient.chat_id)
+        # Если удалось отправить сообщение пациенту
+        if Restore.restore_patient_msg(self.context, chat_id=patient.chat_id):
+            # Восстановление обычных Daily тасков
+            p.recreate_notification(self.context)
+
+            # Восстановление цикличных тасков. Если для них соответствует время
+            p.restore_repeating_task(self.context)
+
+        logging.info(f'SENT PATIENT RESTORE_MSG: {p.chat_id}')
 
     @staticmethod
     def restore_all_doctors(context):
@@ -76,7 +76,6 @@ class Restore:
 
             Restore.restore_uni_msg(context, chat_id=user.chat_id)
 
-
     @staticmethod
     def restore_patient_msg(context, **kwargs):
         text = 'Уважаемый пользователь, чат-бот был перезапущен.\n' \
@@ -90,11 +89,13 @@ class Restore:
         try:
             context.bot.send_message(kwargs['chat_id'], text=text,
                                      reply_markup=kb)
+            return True
         except (error.Unauthorized, error.BadRequest):
             for task in (f'{kwargs["chat_id"]}-MOR',
                          f'{kwargs["chat_id"]}-EVE',
                          f'{kwargs["chat_id"]}-rep_task'):
                 remove_job_if_exists(task, context)
+            return False
 
     @staticmethod
     def restore_doctor_msg(context, **kwargs):
@@ -113,7 +114,8 @@ class Restore:
         except error.Unauthorized:
             pass
         except Exception as e:
-            logging.warning(f'CANT SEND RESTORE_MSG TO DOCTOR. '
+            logging.warning(f'CANT SEND RESTORE_MSG TO '
+                            f'DOCTOR-{kwargs["chat_id"]}. '
                             f'CHAT NOT FOUND. \nMORE: {e}')
 
     @staticmethod
@@ -133,7 +135,8 @@ class Restore:
         except error.Unauthorized:
             pass
         except Exception as e:
-            logging.warning(f'CANT SEND RESTORE_MSG TO REGION. '
+            logging.warning(f'CANT SEND RESTORE_MSG TO '
+                            f'REGION-{kwargs["chat_id"]}. '
                             f'CHAT NOT FOUND. \nMORE: {e}')
 
     @staticmethod
@@ -153,7 +156,8 @@ class Restore:
         except error.Unauthorized:
             pass
         except Exception as e:
-            logging.warning(f'CANT SEND RESTORE_MSG TO UNI. '
+            logging.warning(f'CANT SEND RESTORE_MSG TO '
+                            f'UNI-{kwargs["chat_id"]}. '
                             f'CHAT NOT FOUND. \nMORE: {e}')
 
 
@@ -163,6 +167,9 @@ def patient_restore_handler(update: Update, context: CallbackContext):
 
     # Устанавливаем в контекст ранее созданный объект пациента
     user = context.user_data['user'] = users_list[update.effective_chat.id]
+
+    if not user:
+        return
 
     logging.info(f'RESTORED PATIENT: {user.chat_id}')
 
@@ -206,6 +213,8 @@ def doctor_restore_handler(update: Update, context: CallbackContext):
     from modules.patronage_dialogs import DoctorJob
 
     doc = context.user_data['user'] = users_list[update.effective_chat.id]
+    if not doc:
+        return
     logging.info(f'RESTORED DOCTOR: {doc.chat_id}')
     try:
         update.callback_query.delete_message()
@@ -222,8 +231,12 @@ def doctor_restore_handler(update: Update, context: CallbackContext):
 def region_restore_handler(update: Update, context: CallbackContext):
     from modules.patronage_dialogs import RegionJob
 
-    doc = context.user_data['user'] = users_list[update.effective_chat.id]
-    logging.info(f'RESTORED REGION: {doc.chat_id}')
+    reg = context.user_data['user'] = users_list[update.effective_chat.id]
+
+    if not reg:
+        return
+
+    logging.info(f'RESTORED REGION: {reg.chat_id}')
     try:
         update.callback_query.delete_message()
         update.effective_chat.send_message('Доступ восстановлен.')
@@ -239,8 +252,12 @@ def region_restore_handler(update: Update, context: CallbackContext):
 def uni_restore_handler(update: Update, context: CallbackContext):
     from modules.patronage_dialogs import UniJob
 
-    doc = context.user_data['user'] = users_list[update.effective_chat.id]
-    logging.info(f'RESTORED UNI: {doc.chat_id}')
+    uni = context.user_data['user'] = users_list[update.effective_chat.id]
+
+    if not uni:
+        return
+
+    logging.info(f'RESTORED UNI: {uni.chat_id}')
     try:
         update.callback_query.delete_message()
         update.effective_chat.send_message('Доступ восстановлен.')
