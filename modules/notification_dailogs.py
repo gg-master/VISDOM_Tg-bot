@@ -146,7 +146,7 @@ class PillTakingDialog(ConversationHandler):
     def reason(update: Update, context: CallbackContext):
         """Запрашивает у пользователя причину"""
         text = 'Опишите вашу причину'
-        if not context.user_data[START_OVER]:
+        if not context.user_data.get(START_OVER):
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text)
         else:
@@ -299,7 +299,7 @@ class DataCollectionDialog(ConversationHandler):
             text = 'Введите значение диастолического АД (ДАД)'
         else:
             text = 'Введите значение частоты сердечных сокращений (ЧСС)'
-        if not context.user_data[START_OVER]:
+        if not context.user_data.get(START_OVER):
             update.callback_query.answer()
             update.callback_query.edit_message_text(text=text)
         else:

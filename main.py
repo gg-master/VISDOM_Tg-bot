@@ -54,8 +54,8 @@ def main():
 
     updater = Updater(get_from_env('TOKEN'),
                       use_context=True, defaults=Defaults(run_async=True),
-                      request_kwargs={'read_timeout': 10,
-                                      'connect_timeout': 10})
+                      request_kwargs={'read_timeout': 20,
+                                      'connect_timeout': 20})
 
     dp = updater.dispatcher
 

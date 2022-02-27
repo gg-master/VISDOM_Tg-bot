@@ -39,17 +39,18 @@ class Restore:
             times={'MOR': accept_times[0].time, 'EVE': accept_times[1].time},
             accept_times={'MOR': accept_times[0].id, 'EVE': accept_times[1].id}
         )
-        # Восстановление обычных Daily тасков
-        p.recreate_notification(self.context)
-
-        # Восстановление цикличных тасков. Если для них соответствует время
-        p.restore_repeating_task(self.context)
-
         # Проверяем пациента на время последней записи
         p.check_user_records(self.context)
 
-        logging.info(f'RESTORED PATIENT NOTIFICATIONS: {p.chat_id}')
-        Restore.restore_patient_msg(self.context, chat_id=patient.chat_id)
+        # Если удалось отправить сообщение пациенту
+        if Restore.restore_patient_msg(self.context, chat_id=patient.chat_id):
+            # Восстановление обычных Daily тасков
+            p.recreate_notification(self.context)
+
+            # Восстановление цикличных тасков. Если для них соответствует время
+            p.restore_repeating_task(self.context)
+
+        logging.info(f'SENT PATIENT RESTORE_MSG: {p.chat_id}')
 
     @staticmethod
     def restore_all_doctors(context):
@@ -88,11 +89,13 @@ class Restore:
         try:
             context.bot.send_message(kwargs['chat_id'], text=text,
                                      reply_markup=kb)
+            return True
         except (error.Unauthorized, error.BadRequest):
             for task in (f'{kwargs["chat_id"]}-MOR',
                          f'{kwargs["chat_id"]}-EVE',
                          f'{kwargs["chat_id"]}-rep_task'):
                 remove_job_if_exists(task, context)
+            return False
 
     @staticmethod
     def restore_doctor_msg(context, **kwargs):
@@ -111,7 +114,8 @@ class Restore:
         except error.Unauthorized:
             pass
         except Exception as e:
-            logging.warning(f'CANT SEND RESTORE_MSG TO DOCTOR. '
+            logging.warning(f'CANT SEND RESTORE_MSG TO '
+                            f'DOCTOR-{kwargs["chat_id"]}. '
                             f'CHAT NOT FOUND. \nMORE: {e}')
 
     @staticmethod
@@ -131,7 +135,8 @@ class Restore:
         except error.Unauthorized:
             pass
         except Exception as e:
-            logging.warning(f'CANT SEND RESTORE_MSG TO REGION. '
+            logging.warning(f'CANT SEND RESTORE_MSG TO '
+                            f'REGION-{kwargs["chat_id"]}. '
                             f'CHAT NOT FOUND. \nMORE: {e}')
 
     @staticmethod
@@ -151,7 +156,8 @@ class Restore:
         except error.Unauthorized:
             pass
         except Exception as e:
-            logging.warning(f'CANT SEND RESTORE_MSG TO UNI. '
+            logging.warning(f'CANT SEND RESTORE_MSG TO '
+                            f'UNI-{kwargs["chat_id"]}. '
                             f'CHAT NOT FOUND. \nMORE: {e}')
 
 

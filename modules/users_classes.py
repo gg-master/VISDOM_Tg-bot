@@ -185,7 +185,7 @@ class PatientUser(BasicUser):
     # Паттыерн для вроверки формата кода
     code_pat = f'^{region_code}{doctor_code}{pat_code}$'
     # Паттерн для отделения цифр у пользователя из кода (при наличии)
-    univ_code_pat = f'^({region_code}{doctor_code}{pat_name}){pat_num}$'
+    univ_code_pat = f'^{region_code}({doctor_code}{pat_name}){pat_num}$'
     # Паттерн для получения только цифр пользователя из кода
     usr_code_num_pat = f'^{region_code}{doctor_code}{pat_name}({pat_num})$'
 
@@ -224,13 +224,19 @@ class PatientUser(BasicUser):
         self.code = code
 
     def validate_code(self):
+        # Разделяем введенный код на части
+        r_code = re.findall(self.region_pat, self.code)[0].rjust(3, '0')
+        d_code = re.findall(self.doctor_pat, self.code)[0]
+        u_code = re.findall(self.user_pat, self.code)[0]
+
         # Получаем код пациента без цифр в конце
-        univ_code = re.findall(self.univ_code_pat, self.code)[0]
+        univ_code = r_code + re.findall(self.univ_code_pat, self.code)[0]
 
         # Получаем всех пациентов, у которых одинаково ФИО
         patients = get_all_patients_by_user_code(univ_code)
 
-        if patients and any(map(lambda x: x.user_code == self.code, patients)):
+        if patients and any(map(lambda x: x.user_code == r_code + d_code +
+                                u_code, patients)):
             # Добавляем цифры к коду, если совпали
             advise_code = univ_code + str(int('0' + re.findall(
                 self.usr_code_num_pat, patients[-1].user_code)[0]) + 1)
@@ -239,11 +245,6 @@ class PatientUser(BasicUser):
                 f'Рекомендуем использовать код: {advise_code}',
                 advise_code
             )
-
-        # Разделяем введенный код на части
-        r_code = re.findall(self.region_pat, self.code)[0].rjust(3, '0')
-        d_code = re.findall(self.doctor_pat, self.code)[0]
-        u_code = re.findall(self.user_pat, self.code)[0]
 
         doc = get_doctor_by_code(r_code + d_code)
         if not doc:
@@ -482,7 +483,7 @@ class PatientUser(BasicUser):
                 RegionUser.send_alarm(
                     context=context,
                     user=self,
-                    doctor_code=region + doc,
+                    region_code=region,
                     days=days
                 )
 
@@ -507,7 +508,7 @@ class DoctorUser(BasicUser):
     # Паттыерн для вроверки формата кода
     code_pat = f'^{region_code}{doctor_code}$'
     # Паттерн для отделения цифр у врача из кода (при наличии)
-    univ_code_pat = f'^({region_code}{doctor_name}){doctor_num}$'
+    univ_code_pat = f'^{region_code}({doctor_name}){doctor_num}$'
     # Паттерн для получения только цифр врача из кода
     doc_code_num_pat = f'^{region_code}{doctor_name}({doctor_num})$'
 
@@ -526,12 +527,17 @@ class DoctorUser(BasicUser):
         self.code = code
 
     def validate_code(self):
+        # Код региона
+        r_code = re.findall(self.region_pat, self.code)[0].rjust(3, '0')
+        d_code = re.findall(self.doctor_pat, self.code)[0]
+
         # Получаем код врача без цифр в конце
-        univ_code = re.findall(self.univ_code_pat, self.code)[0]
+        univ_code = r_code + re.findall(self.univ_code_pat, self.code)[0]
         # Получаем всех врачей, у которых одинаково ФИО
         doctors = get_all_doctors_by_user_code(univ_code)
 
-        if doctors and any(map(lambda x: x.doctor_code == self.code, doctors)):
+        if doctors and any(map(lambda x: x.doctor_code == r_code + d_code,
+                               doctors)):
             # Добавляем цифры к коду, если совпали
             advise_code = univ_code + str(int('0' + re.findall(
                self.doc_code_num_pat, doctors[-1].doctor_code)[0]) + 1)
@@ -540,14 +546,12 @@ class DoctorUser(BasicUser):
                 f'Рекомендуем использовать код: {advise_code}',
                 advise_code
             )
-        r_code = re.findall(self.region_pat, self.code)[0].rjust(3, '0')
-
         region = get_region_by_code(r_code)
         if not region:
             raise RegionNotFound('Ваш регион не найден. Проверьте Ваш код.')
 
         self.region_id = region.id
-        self.code = r_code + re.findall(self.doctor_pat, self.code)[0]
+        self.code = r_code + d_code
 
     def register(self, update: Update, context: CallbackContext):
         super().register()
@@ -590,6 +594,10 @@ class DoctorUser(BasicUser):
                                          reply_markup=kb)
             except error.Unauthorized:
                 pass
+            except Exception as e:
+                logging.warning(f'CANT SEND ALARM TO '
+                                f'DOCTOR-{kwargs["doctor_code"]}. '
+                                f'CHAT NOT FOUND. \nMORE: {e}')
 
 
 class RegionUser(BasicUser):
@@ -630,8 +638,8 @@ class RegionUser(BasicUser):
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
         user = kwargs['user']
-        doctor = get_doctor_by_code(kwargs['doctor_code'])
-        if doctor:
+        region = get_region_by_code(kwargs['region_code'])
+        if region:
             text = f'❗️ Внимание ❗️\n' \
                    f'В течении суток пациент {user.code} не принял ' \
                    f'лекарство/не отправил данные давления и ЧСС.\n' \
@@ -643,10 +651,14 @@ class RegionUser(BasicUser):
                     callback_data=f'A_PATIENT_DATA&{user.code}')]],
                 one_time_keyboard=True)
             try:
-                context.bot.send_message(doctor.chat_id, text,
+                context.bot.send_message(region.chat_id, text,
                                          reply_markup=kb)
             except error.Unauthorized:
                 pass
+            except Exception as e:
+                logging.warning(f'CANT SEND ALARM TO '
+                                f'REGION-{kwargs["region_code"]}. '
+                                f'CHAT NOT FOUND. \nMORE: {e}')
 
 
 class UniUser(BasicUser):
