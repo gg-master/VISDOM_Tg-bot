@@ -71,11 +71,10 @@ class BaseJob(ConversationHandler):
     @registered_patronages()
     def send_user_data(update: Update, context: CallbackContext):
         user_code = context.user_data['user'].code + update.message.text
-        if not user_code.startswith(context.user_data['user'].code):
-            update.message.reply_text('У вас нет прав для просмотра'
-                                      ' статистики этого пациента')
-            return END
-
+        # if not user_code.startswith(context.user_data['user'].code):
+        #     update.message.reply_text('У вас нет прав для просмотра'
+        #                               ' статистики этого пациента')
+        #     return END
         if patient_exists_by_user_code(user_code):
             try:
                 make_file_by_patient_user_code(user_code)
@@ -98,16 +97,15 @@ class BaseJob(ConversationHandler):
     @staticmethod
     @registered_patronages()
     def exclude_patient(update: Update, context: CallbackContext):
-        user_code = update.message.text
-        if not user_code.startswith(context.user_data['user'].code):
-            update.message.reply_text('У вас нет прав для просмотра'
-                                      ' статистики этого пациента')
-            return END
+        user_code = context.user_data['user'].code + update.message.text
+        # if not user_code.startswith(context.user_data['user'].code):
+        #     update.message.reply_text('У вас нет прав для исключения пациента'
+        #                               ' из исследования')
+        #     return END
         patient = get_patient_by_user_code(user_code)
         try:
             if patient:
                 change_patients_membership(user_code)
-
                 users_list[patient.chat_id].change_membership(context)
                 logging.info(f'Patient {user_code}-{patient.chat_id} EXCLUDE')
 
