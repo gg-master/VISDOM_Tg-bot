@@ -9,7 +9,7 @@ def main() -> None:
     # add_patient(strptime('8:00', '%H:%M'), strptime('20:00', '%H:%M'),
     #             name='Ivanov Ivan Ivanovich', user_code=122, time_zone=3,
     #             chat_id=394)
-    accept_times = get_accept_times_by_patient_id(4)
+    # accept_times = get_accept_times_by_patient_id(4)
     # print(accept_times)
     # add_record(time=accept_times[0].time,
     #            sys_press=120,
@@ -42,7 +42,8 @@ def main() -> None:
     # record = get_last_record_by_accept_time(accept_times[0].id)
     # print(record.response_time)
     # make_patient_list(doctor_code='ВВП')
-    create_session()
+    # create_session()
+    print(get_patient_by_user_code('034ASDВВП'))
 
 
 
