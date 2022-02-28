@@ -25,7 +25,7 @@ def global_init():
     db_address = get_from_env('DB_ADDRESS')
 
     conn_str = db_address
-    # print(f"Подключение к базе данных по адресу {conn_str}")
+
     logging.info(f"Подключение к базе данных по адресу {conn_str}")
     engine = sa.create_engine(conn_str, echo=False, poolclass=NullPool)
     __factory = orm.sessionmaker(bind=engine, expire_on_commit=False)
