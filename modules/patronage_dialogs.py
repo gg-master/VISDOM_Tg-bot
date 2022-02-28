@@ -240,8 +240,7 @@ class UniJob(BaseJob):
         kb = ReplyKeyboardMarkup(
             [['Получить данные по пациенту',
               'Получить данные по всем пользователям'],
-             ['Получить список пациентов',
-              'Исключить пациента из исследования']],
+             ['Получить список пациентов']],
             row_width=1, resize_keyboard=True)
         try:
             msg = update.effective_chat.send_message(text=text,
