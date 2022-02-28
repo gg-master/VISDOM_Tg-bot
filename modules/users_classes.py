@@ -282,8 +282,8 @@ class PatientUser(BasicUser):
                         f'{self.chat_id}-rep_task'):
 
                 next_r_time = now.replace(
-                    day=now.day + 1, hour=time.hour, minute=time.minute,
-                    second=0, microsecond=0)
+                    day=now.day, hour=time.hour, minute=time.minute,
+                    second=0, microsecond=0) + dt.timedelta(days=1)
 
             create_daily_notification(
                 context=context,
