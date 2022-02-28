@@ -68,7 +68,7 @@ class BasicUser:
         if user_from_list:
             if type(user_from_list) is PatientUser:
                 # Если был исключен до перезагрузки бота
-                if not user_from_list.mebmer:
+                if not user_from_list.member:
                     return self.USER_EXCLUDED
                 return self.USER_IS_PATIENT
             if type(user_from_list) is DoctorUser:

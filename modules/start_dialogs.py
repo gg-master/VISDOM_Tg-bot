@@ -70,10 +70,10 @@ class StartDialog(ConversationHandler):
     @user_separation
     def start(update: Update, context: CallbackContext):
         user = context.user_data.get('user')
-        print(type(user), end=' - ')
+
         if not user or not user.registered():
             context.user_data['user'] = BasicUser(update.effective_chat.id)
-        print(type(context.user_data.get('user')))
+
         buttons = [
             [InlineKeyboardButton(text='Я пациент',
                                   callback_data=f'{SIGN_UP_AS_PATIENT}'),
@@ -300,7 +300,7 @@ class PatientRegistrationDialog(ConversationHandler):
                f'давление и частоту сердечных сокращений. \n\n' \
                f'В {user.times.s_times()["EVE"]} ' \
                f'напомнит о необходимости измерить и сообщить ' \
-               f'артериальное давление и частоту сердечных сокращений еще раз'
+               f'артериальное давление и частоту сердечных сокращений еще раз.'
 
         update.callback_query.answer()
         update.callback_query.delete_message()
@@ -344,7 +344,7 @@ class PatientRegistrationDialog(ConversationHandler):
                f'давление и частоту сердечных сокращений. \n\n' \
                f'В {context.user_data["user"].times.s_times()["EVE"]} ' \
                f'напомнит о необходимости измерить и сообщить ' \
-               f'артериальное давление и частоту сердечных сокращений еще раз'
+               f'артериальное давление и частоту сердечных сокращений еще раз.'
         try:
             msg = context.bot.send_message(
                 update.effective_chat.id, text=text,

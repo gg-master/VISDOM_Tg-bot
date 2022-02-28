@@ -95,6 +95,7 @@ class SettingsDialog(ConversationHandler):
             return SettingsDialog.start(update, context)
 
     @staticmethod
+    @registered_patient
     def confirm(update: Update, context: CallbackContext):
         from modules.start_dialogs import PatientRegistrationDialog
         update.callback_query.delete_message()
