@@ -97,7 +97,6 @@ class FindLocationDialog(ConversationHandler):
             row_width=1, resize_keyboard=True, one_time_keyboard=True)
 
         if not context.user_data.get(START_OVER):
-            update.callback_query.answer()
             update.callback_query.delete_message()
             if context.chat_data.get('st_msg'):
                 context.chat_data['st_msg'] = None

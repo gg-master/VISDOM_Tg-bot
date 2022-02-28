@@ -23,7 +23,6 @@ class Notification:
 
         if not context.user_data.get(START_OVER):
             try:
-                update.callback_query.answer()
                 msg = update.callback_query.edit_message_text(
                     text=text, reply_markup=keyboard)
             except error.TelegramError:
@@ -147,7 +146,6 @@ class PillTakingDialog(ConversationHandler):
         """Запрашивает у пользователя причину"""
         text = 'Опишите вашу причину'
         if not context.user_data.get(START_OVER):
-            update.callback_query.answer()
             update.callback_query.edit_message_text(text=text)
         else:
             try:
@@ -181,7 +179,6 @@ class PillTakingDialog(ConversationHandler):
         """Завершение первого утреннего диалога"""
         text = 'Мы сохранили Ваш ответ. Спасибо!'
 
-        update.callback_query.answer()
         update.callback_query.edit_message_text(text=text)
 
         # Переключаем индекс диалога у пользователя из задачи.
@@ -300,7 +297,6 @@ class DataCollectionDialog(ConversationHandler):
         else:
             text = 'Введите значение частоты сердечных сокращений (ЧСС)'
         if not context.user_data.get(START_OVER):
-            update.callback_query.answer()
             update.callback_query.edit_message_text(text=text)
         else:
             try:
@@ -338,7 +334,6 @@ class DataCollectionDialog(ConversationHandler):
 
         text = 'Мы сохранили Ваш ответ. Спасибо!'
 
-        update.callback_query.answer()
         update.callback_query.edit_message_text(text=text)
 
         # Удаляем повторяющийся таск

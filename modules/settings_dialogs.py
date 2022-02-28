@@ -75,7 +75,6 @@ class SettingsDialog(ConversationHandler):
         kb = InlineKeyboardMarkup(buttons)
 
         if context.user_data.get(START_OVER):
-            update.callback_query.answer()
             update.callback_query.edit_message_text(text=text,
                                                     reply_markup=kb)
         else:

@@ -12,7 +12,7 @@ from db_api import (change_patients_membership, get_patient_by_user_code,
 from modules.dialogs_shortcuts.start_shortcuts import (END, EXCLUDE_PATIENT,
                                                        SEND_USER_DATA_PAT)
 from modules.users_list import users_list
-from modules.users_classes import DoctorUser, RegionUser, UniUser
+from modules.users_classes import DoctorUser, RegionUser
 from tools.decorators import registered_patronages
 
 
@@ -58,7 +58,7 @@ class BaseJob(ConversationHandler):
             return END
 
     @staticmethod
-    @registered_patronages(RegionUser, UniUser)
+    @registered_patronages(RegionUser)
     def exclude_patient_state(update: Update, context: CallbackContext):
         text = 'Введите код пациента'
         try:
@@ -99,7 +99,7 @@ class BaseJob(ConversationHandler):
     def exclude_patient(update: Update, context: CallbackContext):
         user_code = context.user_data['user'].code + update.message.text
         # if not user_code.startswith(context.user_data['user'].code):
-        #     update.message.reply_text('У вас нет прав для исключения пациента'
+        #    update.message.reply_text('У вас нет прав для исключения пациента'
         #                               ' из исследования')
         #     return END
         patient = get_patient_by_user_code(user_code)

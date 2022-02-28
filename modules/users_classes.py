@@ -260,13 +260,12 @@ class PatientUser(BasicUser):
                 f'Рекомендуем использовать код: {advise_code}',
                 advise_code
             )
+        if not get_region_by_code(r_code):
+            raise RegionNotFound('Ваш регион не найден. Проверьте Ваш код.')
 
         doc = get_doctor_by_code(r_code + d_code)
         if not doc:
             raise DoctorNotFound(f'Ваш доктор не найден. Проверьте Ваш код.')
-
-        if not get_region_by_code(r_code):
-            raise RegionNotFound('Ваш регион не найден. Проверьте Ваш код.')
 
         self.doctor_id = doc.id
         self.code = r_code + d_code + u_code
@@ -385,7 +384,6 @@ class PatientUser(BasicUser):
                        args=(ch_times, ch_tz)).start()
 
             # Восстанавливливаем уведомления
-            # TODO хорошо бы получше протестить этот момент
             Thread(target=self._thr_restore_notifications, args=(context,),
                    kwargs={'register': not check_user}).start()
 

@@ -92,7 +92,6 @@ class StartDialog(ConversationHandler):
                'необходимо зарегистрироваться.'
 
         if context.user_data.get(START_OVER):
-            update.callback_query.answer()
             update.callback_query.edit_message_text(text=text,
                                                     reply_markup=kb)
         else:
@@ -221,7 +220,6 @@ class PatientRegistrationDialog(ConversationHandler):
         kb = InlineKeyboardMarkup(buttons)
 
         if not context.user_data.get(START_OVER):
-            update.callback_query.answer()
             update.callback_query.edit_message_text(text=text,
                                                     reply_markup=kb)
         else:
@@ -243,7 +241,6 @@ class PatientRegistrationDialog(ConversationHandler):
                'Пример: 77АБВКАА'
 
         if not context.user_data.get(START_OVER):
-            update.callback_query.answer()
             update.callback_query.edit_message_text(text=text)
         else:
             context.user_data[START_OVER] = False
@@ -302,7 +299,6 @@ class PatientRegistrationDialog(ConversationHandler):
                f'напомнит о необходимости измерить и сообщить ' \
                f'артериальное давление и частоту сердечных сокращений еще раз.'
 
-        update.callback_query.answer()
         update.callback_query.delete_message()
 
         try:
@@ -416,7 +412,6 @@ class ConfigureTZDialog(ConversationHandler):
         kb = InlineKeyboardMarkup(buttons)
 
         if not context.user_data.get(START_OVER):
-            update.callback_query.answer()
             update.callback_query.edit_message_text(text=text,
                                                     reply_markup=kb)
         else:
@@ -433,7 +428,6 @@ class ConfigureTZDialog(ConversationHandler):
         text = 'Введите Ваш часовой пояс в следующем формате:\n ' \
                '+(-){Ваш часовой пояс}\nПример: +3'
         if not context.user_data.get(START_OVER):
-            update.callback_query.answer()
             update.callback_query.edit_message_text(text=text)
         else:
             context.user_data[START_OVER] = False
@@ -546,7 +540,6 @@ class ConfigureNotifTimeDialog(ConversationHandler):
         ]
         keyboard = InlineKeyboardMarkup(buttons)
 
-        update.callback_query.answer()
         update.callback_query.edit_message_text(text=text,
                                                 reply_markup=keyboard)
         return CONF_NOTIF_ACTIONS
@@ -564,7 +557,6 @@ class ConfigureNotifTimeDialog(ConversationHandler):
 
         keyboard = InlineKeyboardMarkup(ConfigureNotifTimeDialog.buttons)
 
-        update.callback_query.answer()
         update.callback_query.edit_message_text(text=text,
                                                 reply_markup=keyboard)
         return TIME_CHANGE
@@ -591,7 +583,6 @@ class ConfigureNotifTimeDialog(ConversationHandler):
 
         keyboard = InlineKeyboardMarkup(ConfigureNotifTimeDialog.buttons)
 
-        update.callback_query.answer()
         update.callback_query.edit_message_text(text=text,
                                                 reply_markup=keyboard)
         return TIME_CHANGE
@@ -689,7 +680,6 @@ class DoctorRegistrationDialog(ConversationHandler):
                'Пример: 77АБВ'
 
         if not context.user_data.get(START_OVER):
-            update.callback_query.answer()
             update.callback_query.edit_message_text(text=text)
         else:
             context.user_data[START_OVER] = False
@@ -789,7 +779,6 @@ class RegionRegistrationDialog(DoctorRegistrationDialog):
                'Пример: 77'
 
         if not context.user_data.get(START_OVER):
-            update.callback_query.answer()
             update.callback_query.edit_message_text(text=text)
         else:
             context.user_data[START_OVER] = False
