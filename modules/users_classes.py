@@ -55,13 +55,15 @@ class BasicUser:
         self.code = ''
         self.is_registered = False
 
-    def registered(self):
+    def registered(self) -> bool:
         return self.is_registered
 
-    def register(self, *args):
+    def register(self, *args) -> None:
         self.is_registered = True
 
-    def check_user_reg(self):
+    def check_user_reg(self) -> int:
+        """Определение к кому принадлежит пользователь"""
+
         # Проверяем сначала список, чтобы не тратить время на запрос в бд
         user_from_list = users_list[self.chat_id]
 
@@ -90,12 +92,14 @@ class BasicUser:
 
 
 class PatientTimes:
+    # Границы времени уведомлений
     time_limiters = {
         'MOR': [dt.datetime(1212, 12, 12, 6, 00, 0),
                 dt.datetime(1212, 12, 12, 12, 00, 0)],
         'EVE': [dt.datetime(1212, 12, 12, 17, 00, 0),
                 dt.datetime(1212, 12, 12, 21, 00, 0)]
     }
+    # Значения времени по умолчанию
     default_times = {
         'MOR': dt.datetime(1212, 12, 12, 8, 00, 0),
         'EVE': dt.datetime(1212, 12, 12, 20, 00, 0)
@@ -115,10 +119,11 @@ class PatientTimes:
         return dict(map(lambda x: (x, self.times[x].strftime("%H:%M")),
                         self.times.keys()))
 
-    def add_minutes(self, time, minutes):
+    def add_minutes(self, time, minutes) -> bool:
         # Добавление минут
         delta = dt.timedelta(minutes=int(minutes))
         self.times[time] += delta
+
         # Ограничение времени
         if not (self.default_times[time].replace(
                 hour=self.default_times[time].hour - 1) <= self.times[time] <=
@@ -139,18 +144,20 @@ class PatientTimes:
         return self.times.items()
 
     def cancel_updating(self):
+        """Возвращает время к изначальным значениям"""
         self.times = self.orig_t.copy()
 
-    def save_updating(self):
+    def save_updating(self) -> bool:
+        """Сохраняем новое время уведомлений"""
         if self.times != self.orig_t:
             self.orig_t = self.times.copy()
             return True
         return False
 
-    def is_updating(self):
+    def is_updating(self) -> bool:
         return self.times != self.orig_t
 
-    def __getitem__(self, item):
+    def __getitem__(self, item) -> dt.datetime:
         return self.times[item]
 
 
@@ -161,10 +168,12 @@ class PatientLocation:
             pattern=r'[+-]?\d+', string=self.tz.zone).group(0))
             if tz else None) if tz else None
 
-    def cancel_updating(self):
+    def cancel_updating(self) -> None:
+        """Возвращает местоположение в оригинальное"""
         self.location = self.orig_loc
 
-    def save_updating(self):
+    def save_updating(self) -> bool:
+        """Сохранение нового местоположения"""
         if self.location != self.orig_loc:
             self.tz = pytz.timezone(convert_tz(self.location.get_coords(),
                                                self.location.time_zone()))
@@ -173,11 +182,13 @@ class PatientLocation:
             return True
         return False
 
-    def is_updating(self):
+    def is_updating(self) -> bool:
+        """Возвращает результат сравнения местоположений"""
         return self.location != self.orig_loc
 
 
 class PatientUser(BasicUser):
+    # Последовательность сообщений в уведомлении
     notification_states = {
         'MOR': [PillTakingDialog, DataCollectionDialog],
         'EVE': [DataCollectionDialog]
@@ -218,12 +229,16 @@ class PatientUser(BasicUser):
         self.data_response = {'sys': None, 'dias': None, 'heart': None}
 
     def set_code(self, code):
+        """Проверка пользовательского кода на соответствие формату при вводе"""
+
         # Код не подходит по патерну, то вызываем ошибку
         if not re.match(self.code_pat, code):
             raise ValueError()
         self.code = code
 
     def validate_code(self):
+        """Проверка пользовательского кода перед регистрацией"""
+
         # Разделяем введенный код на части
         r_code = re.findall(self.region_pat, self.code)[0].rjust(3, '0')
         d_code = re.findall(self.doctor_pat, self.code)[0]
@@ -257,6 +272,7 @@ class PatientUser(BasicUser):
         self.code = r_code + d_code + u_code
 
     def change_membership(self, context: CallbackContext):
+        """Для исключения пациента из исследования"""
         self.member = False
 
         for task in (f'{self.chat_id}-MOR', f'{self.chat_id}-EVE',
@@ -271,6 +287,8 @@ class PatientUser(BasicUser):
 
             now = dt.datetime.now(tz=self.p_loc.tz)
             next_r_time = None
+
+            # Зарегистрирован ли пациент впервые
             if self.check_last_record_by_name(name)[0] or \
                     (name == 'MOR' and (
                     kwargs.get('register') or (
@@ -280,10 +298,10 @@ class PatientUser(BasicUser):
                         self.accept_times['MOR'])))) or \
                     context.job_queue.get_jobs_by_name(
                         f'{self.chat_id}-rep_task'):
-
+                # Утреннее уведомление переносим на день вперед
                 next_r_time = now.replace(
-                    day=now.day, hour=time.hour, minute=time.minute,
-                    second=0, microsecond=0) + dt.timedelta(days=1)
+                    hour=time.hour, minute=time.minute, second=0,
+                    microsecond=0) + dt.timedelta(days=1)
 
             create_daily_notification(
                 context=context,
@@ -300,9 +318,11 @@ class PatientUser(BasicUser):
             )
 
     def recreate_notification(self, context: CallbackContext, **kwargs):
+        """Восстановление ежедневных тасков"""
         self.create_notification(context, **kwargs)
 
     def restore_repeating_task(self, context: CallbackContext, **kwargs):
+        """Восстановление повторяющихся тасков"""
         restore_repeating_task(self, context, **kwargs)
 
     def _thr_restore_notifications(self, context, **kwargs):
@@ -322,7 +342,7 @@ class PatientUser(BasicUser):
         (т.е. в каком диалоге находится пользователь)"""
         return self.curr_state
 
-    def set_curr_state(self, name):
+    def set_curr_state(self, name: str):
         """Устанавливает новое состояние"""
         self.curr_state = [name, 0]
 
@@ -373,6 +393,7 @@ class PatientUser(BasicUser):
             self.check_user_records(context)
 
     def _threading_save_sett(self, ch_times, ch_tz):
+        """Сохранение новых настроек в бд"""
         if ch_times:
             change_accept_time(self.accept_times['MOR'],
                                self.times['MOR'].time())
@@ -383,6 +404,7 @@ class PatientUser(BasicUser):
 
     def restore(self, code: str, times: Dict[str, dt.time], tz_str: str,
                 accept_times):
+        """Восстановление пользователя после перезапуска бота"""
         super().register()
         users_list[self.chat_id] = self
 
@@ -396,6 +418,7 @@ class PatientUser(BasicUser):
         self._set_curr_state_by_time()
 
     def enable_user(self, context: CallbackContext):
+        """Восстановление пользователя, после разблокировки им бота"""
         Thread(target=self._threading_enable, args=(context,)).start()
 
     def _threading_enable(self, context: CallbackContext):
@@ -408,6 +431,7 @@ class PatientUser(BasicUser):
                 self.restore_repeating_task(context)
 
     def register(self, update: Update, context: CallbackContext):
+        """Регистрация пациента"""
         super().register()
         logging.info(f'REGISTER NEW USER: '
                      f'{update.effective_user.id} - {self.code}')
@@ -432,6 +456,7 @@ class PatientUser(BasicUser):
         self.save_updating(context, check_user=False)
 
     def save_patient_record(self):
+        """Сохранение результатов ответа на уведомления"""
         self.alarmed[self.state()[0]] = False
         Thread(target=self._threading_save_record).start()
 
@@ -458,6 +483,8 @@ class PatientUser(BasicUser):
     def _thread_check_user_records(self, context: CallbackContext):
         mor_record = self.check_last_record_by_name('MOR')
         eve_record = self.check_last_record_by_name('EVE')
+
+        # Если есть какие-либо записи и время ответа >= 25 часов
         if (not mor_record[0] and mor_record[1] >= 25) or \
                 (not eve_record[0] and eve_record[1] >= 25):
             self.alarmed['MOR' if mor_record[1] >= 25 else "EVE"] = True
@@ -489,6 +516,7 @@ class PatientUser(BasicUser):
 
     def check_last_record_by_name(self, name) -> Tuple[bool, int]:
         """
+        Получение из бд времени последнего ответа по названию типа уведомления
         :param name:
         :return: True if all right and last record time less than 24 hour
         :return: False if last record time more then 24 hour
