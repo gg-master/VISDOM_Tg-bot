@@ -237,7 +237,7 @@ class PatientRegistrationDialog(ConversationHandler):
     def conf_code(update: Update, context: CallbackContext):
         text = 'Введите Ваш персональный код.\n' \
                'Формат: [Регион (2-3сим)][Врач (3-4cим)]' \
-               '[Пациент (>3сим)]\n' \
+               '[Пациент (3-10сим)]\n' \
                'Пример: 77АБВКАА'
 
         if not context.user_data.get(START_OVER):

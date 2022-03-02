@@ -38,7 +38,7 @@ doctor_code = f'{doctor_name}{doctor_num}'
 
 # Паттерн пациента
 pat_name = r'[a-zA-Zа-яА-ЯёЁ]{3}'
-pat_num = r'\d*'
+pat_num = r'\d{,10}'
 pat_code = f'{pat_name}{pat_num}'
 
 
