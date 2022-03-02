@@ -43,7 +43,8 @@ def main() -> None:
     # print(record.response_time)
     # make_patient_list(doctor_code='ВВП')
     # create_session()
-    print(get_patient_by_user_code('034ASDВВП'))
+    # print(get_patient_by_user_code('034ASDВВП'))
+    create_session()
 
 
 
