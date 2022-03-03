@@ -28,7 +28,8 @@ def unknown(update: Update, context: CallbackContext):
 
 
 def help_msg(update: Update, context: CallbackContext):
-    from modules.users_classes import BasicUser, PatientUser, DoctorUser
+    from modules.users_classes import BasicUser, PatientUser, DoctorUser, \
+        RegionUser, UniUser
     try:
         if not context.user_data.get('user'):
             update.message.reply_text(
@@ -43,7 +44,11 @@ def help_msg(update: Update, context: CallbackContext):
         elif type(context.user_data.get('user')) is PatientUser:
             update.message.reply_text("Справка. Команды Для пациента.")
         elif type(context.user_data.get('user')) is DoctorUser:
-            update.message.reply_text("Справка. Команды для патронажа.")
+            update.message.reply_text("Справка. Команды для врача.")
+        elif type(context.user_data.get('user')) is RegionUser:
+            update.message.reply_text("Справка. Команды для сотрудника.")
+        elif type(context.user_data.get('user')) is UniUser:
+            update.message.reply_text("Справка. Команды для ВолГМУ.")
     except error.Unauthorized:
         pass
 
@@ -53,7 +58,8 @@ def main():
         os.mkdir("static")
 
     updater = Updater(get_from_env('TOKEN'),
-                      use_context=True, defaults=Defaults(run_async=True),
+                      workers=8, use_context=True,
+                      defaults=Defaults(run_async=True),
                       request_kwargs={'read_timeout': 20,
                                       'connect_timeout': 20})
 
