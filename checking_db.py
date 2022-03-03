@@ -47,7 +47,5 @@ def main() -> None:
     create_session()
 
 
-
-
 if __name__ == "__main__":
     main()
