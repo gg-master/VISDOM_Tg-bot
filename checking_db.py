@@ -6,9 +6,9 @@ from datetime import datetime
 
 
 def main() -> None:
-    # add_patient(strptime('8:00', '%H:%M'), strptime('20:00', '%H:%M'),
-    #             name='Ivanov Ivan Ivanovich', user_code=122, time_zone=3,
-    #             chat_id=394)
+    add_patient(strptime('8:00', '%H:%M'), strptime('20:00', '%H:%M'),
+                name='Ivanov Ivan Ivanovich', user_code='034СЕЕИИb', time_zone='fsdf',
+                chat_id=2147483647, member=True)
     # accept_times = get_accept_times_by_patient_id(4)
     # print(accept_times)
     # add_record(time=accept_times[0].time,
@@ -44,7 +44,9 @@ def main() -> None:
     # make_patient_list(doctor_code='ВВП')
     # create_session()
     # print(get_patient_by_user_code('034ASDВВП'))
-    create_session()
+    # create_session()
+    # make_file_patients()
+    # add_patient(name='')
 
 
 if __name__ == "__main__":

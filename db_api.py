@@ -250,15 +250,13 @@ def make_file_patients(user_code=''):
     if not os.path.isdir("static"):
         os.mkdir("static")
     response = f"""SELECT patient.id, patient.user_code,
-                   record.sys_press, record.dias_press,
-                   record.heart_rate, record.time, record.time_zone,
-                   record.response_time, record.comment FROM patient
-                   JOIN accept_time on patient.id =
-                   accept_time.Patient_id JOIN record on accept_time.id
-                   = record.accept_time_id WHERE patient.user_code LIKE
-                    '{user_code}%'"""
-    with db_session.create_session() as db_sess:
-        records = db_sess.execute(response)
+                               record.sys_press, record.dias_press,
+                               record.heart_rate, record.time, record.time_zone,
+                               record.response_time, record.comment FROM patient
+                               JOIN accept_time on patient.id =
+                               accept_time.Patient_id JOIN record on accept_time.id
+                               = record.accept_time_id WHERE patient.user_code LIKE
+                                '{user_code}%'"""
     # wb = Workbook()
     # ws = wb.active
     headers = ['ID пациента', 'Код пациента', 'Систолическое давление',
@@ -270,8 +268,12 @@ def make_file_patients(user_code=''):
         writer = csv.writer(csvfile, delimiter=';', quotechar='"',
                             quoting=csv.QUOTE_MINIMAL)
         writer.writerow(headers)
-        for record in records:
-            writer.writerow(record)
+        with db_session.create_session() as db_sess:
+            for patient_id in db_sess.query(Patient.id).all():
+                records = db_sess.execute(response + f"and patient.id ="
+                                                     f" {patient_id}")
+                for record in records:
+                    writer.writerow(record)
     # for i in range(len(headers)):
     #     ws.cell(row=1, column=i + 1, value=headers[i])
     # i = 2
@@ -280,6 +282,21 @@ def make_file_patients(user_code=''):
     #         ws.cell(row=i, column=j+1, value=record[j])
     #     i += 1
     # wb.save(filename='static/statistics.xlsx')
+
+
+def make_file_patients_csv():
+    response = """SELECT patient.id, patient.user_code,
+                   record.sys_press, record.dias_press,
+                   record.heart_rate, record.time, record.time_zone,
+                   record.response_time, record.comment INTO OUTFILE '/var/lib/mysql-files/orders.csv'
+FIELDS TERMINATED BY ','
+ENCLOSED BY '"'
+LINES TERMINATED BY '\n' FROM patient
+                   JOIN accept_time on patient.id =
+                   accept_time.Patient_id JOIN record on accept_time.id
+                   = record.accept_time_id"""
+    with db_session.create_session() as db_sess:
+        db_sess.execute(response)
 
 
 def make_patient_list(user_code=''):
