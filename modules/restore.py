@@ -8,7 +8,7 @@ from db_api import (get_accept_times_by_patient_id, get_all_patients,
 from modules.users_classes import DoctorUser, RegionUser, UniUser
 from modules.users_list import users_list
 from modules.timer import remove_job_if_exists
-from tools.decorators import not_registered_users
+from tools.decorators import not_registered_users, unavailable_for_user
 
 
 class Restore:
@@ -169,6 +169,7 @@ def patient_restore_handler(update: Update, context: CallbackContext):
     user = context.user_data['user'] = users_list[update.effective_chat.id]
 
     if not user or not user.member:
+        unavailable_for_user(update)
         return
 
     logging.info(f'RESTORED PATIENT: {user.chat_id}')

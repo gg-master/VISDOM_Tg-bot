@@ -23,5 +23,3 @@ class Patient(SqlAlchemyBase):
     def __repr__(self):
         return f'''Patient: {self.id, self.name, self.user_code, self.chat_id,
                              self.time_zone, self.member}'''
-
-
