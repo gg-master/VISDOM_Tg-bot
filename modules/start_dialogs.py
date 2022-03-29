@@ -8,21 +8,29 @@ from modules.patronage_dialogs import DoctorJob, RegionJob, UniJob
 from modules.restore import Restore
 from modules.users_classes import BasicUser, PatientUser, DoctorUser, \
     RegionUser, UniUser
+from modules.users_list import users_list
 from tools.decorators import not_registered_users
 from tools.exceptions import UserExists, DoctorNotFound, RegionNotFound
-from tools.prepared_answers import START_MSG
+from tools.prepared_answers import START_MSG, START_CHOICE_MSG, \
+    STOP_REGISTRATION_MSG, PATIENT_KEYBOARD, SUCCESS_PATIENT_MSG
 from tools.tools import get_from_env
 
 
 def user_separation(func):
     def decorated_func(update: Update, context: CallbackContext):
-        user = context.user_data.get('user')
+        # Если бот перезапускался
+        if not (user := context.user_data.get('user')):
+            user = context.user_data['user'] = users_list[
+                update.effective_user.id]
+
+        # Валидируем пользователя после ввода команды /start
         if not user or not user.registered():
             return func(update, context)
         else:
             if type(user) is PatientUser:
                 if not user.member:
-                    return func(update, context)
+                    return PatientRegistrationDialog.cant_registered(
+                        update, context, res=BasicUser.USER_EXCLUDED)
                 PatientRegistrationDialog.restore_main_msg(update, context)
             elif type(user) is DoctorUser:
                 DoctorJob.default_job(update, context)
@@ -88,17 +96,15 @@ class StartDialog(ConversationHandler):
         ]
         kb = InlineKeyboardMarkup(buttons)
 
-        text = 'Чтобы начать пользоваться Чат-Ботом ' \
-               'необходимо зарегистрироваться.'
-
         if context.user_data.get(START_OVER):
-            update.callback_query.edit_message_text(text=text,
+            update.callback_query.edit_message_text(text=START_CHOICE_MSG,
                                                     reply_markup=kb)
         else:
             try:
                 update.message.reply_text(
                     START_MSG, reply_markup=ReplyKeyboardRemove())
-                msg = update.message.reply_text(text=text, reply_markup=kb)
+                msg = update.message.reply_text(text=START_CHOICE_MSG,
+                                                reply_markup=kb)
                 # Сохраняем id стартового сообщения, если войдет Patronage
                 context.chat_data['st_msg'] = msg.message_id
             except error.Unauthorized:
@@ -113,10 +119,8 @@ class StartDialog(ConversationHandler):
         keyboard = ReplyKeyboardMarkup([['/start']],
                                        row_width=1, resize_keyboard=True)
         try:
-            update.message.reply_text(
-                text='Регистрация прервана.\nЧтобы повторно '
-                     'начать регистрацию отправьте:\n/start',
-                reply_markup=keyboard)
+            update.message.reply_text(text=STOP_REGISTRATION_MSG,
+                                      reply_markup=keyboard)
         except error.Unauthorized:
             pass
         return END
@@ -138,8 +142,8 @@ class StartDialog(ConversationHandler):
 
 
 class PatientRegistrationDialog(ConversationHandler):
-    post_reg_kb = ReplyKeyboardMarkup([['❔Справка', '⚙️Настройки']],
-                                      row_width=1, resize_keyboard=True)
+    post_reg_kb = ReplyKeyboardMarkup(PATIENT_KEYBOARD, row_width=1,
+                                      resize_keyboard=True)
 
     def __init__(self):
         super().__init__(
@@ -290,17 +294,9 @@ class PatientRegistrationDialog(ConversationHandler):
             context.user_data[START_OVER] = True
             return PatientRegistrationDialog.start(update, context)
 
-        text = f'Поздравляем, вы зарегистрированы в системе!\n\n' \
-               f'Теперь каждый день в {user.times.s_times()["MOR"]} ' \
-               f'чат-бот напомнит Вам принять ' \
-               f'лекарство, а также измерить и сообщить артериальное ' \
-               f'давление и частоту сердечных сокращений. \n\n' \
-               f'В {user.times.s_times()["EVE"]} ' \
-               f'напомнит о необходимости измерить и сообщить ' \
-               f'артериальное давление и частоту сердечных сокращений еще раз.'
-
+        text = SUCCESS_PATIENT_MSG.format(user.times.s_times()["MOR"],
+                                          user.times.s_times()["EVE"])
         update.callback_query.delete_message()
-
         try:
             msg = update.effective_chat.send_message(
                 text=text, reply_markup=PatientRegistrationDialog.post_reg_kb)
@@ -323,31 +319,31 @@ class PatientRegistrationDialog(ConversationHandler):
                        'повторно зарегистрироваться.'
                 update.effective_chat.send_message(text)
                 return STOPPING
-            text = 'Вы не можете повторно зарегистрироваться.\n'
+            text = 'Пожалуйста, подождите. Мы восстанавливаем Ваш аккаунт...'
             update.effective_chat.send_message(text)
+
+            # Восстанавливаем пользователя
+            if users_list[update.effective_user.id]:
+                Restore.restore_patient_by_chat_id(update, context)
+
+            PatientRegistrationDialog.restore_main_msg(update, context)
         except error.Unauthorized:
+            pass
+        finally:
             return STOPPING
-        Restore.restore_patient_msg(context, chat_id=update.effective_chat.id)
-        return STOPPING
 
     @staticmethod
     def restore_main_msg(update: Update, context: CallbackContext):
-        text = f'Поздравляем, вы зарегистрированы в системе!\n\n' \
-               f'Теперь каждый день в ' \
-               f'{context.user_data["user"].times.s_times()["MOR"]} ' \
-               f'чат-бот напомнит Вам принять ' \
-               f'лекарство, а также измерить и сообщить артериальное ' \
-               f'давление и частоту сердечных сокращений. \n\n' \
-               f'В {context.user_data["user"].times.s_times()["EVE"]} ' \
-               f'напомнит о необходимости измерить и сообщить ' \
-               f'артериальное давление и частоту сердечных сокращений еще раз.'
+        text = SUCCESS_PATIENT_MSG.format(
+            context.user_data["user"].times.s_times()["MOR"],
+            context.user_data["user"].times.s_times()["EVE"])
         try:
             msg = context.bot.send_message(
                 update.effective_chat.id, text=text,
                 reply_markup=PatientRegistrationDialog.post_reg_kb)
             update.effective_chat.unpin_all_messages()
             update.effective_chat.pin_message(msg.message_id)
-        except error.Unauthorized:
+        except (error.Unauthorized, error.TelegramError):
             return STOPPING
         context.user_data['user'].enable_user(context)
 
@@ -637,8 +633,9 @@ class DoctorRegistrationDialog(ConversationHandler):
                                               reply_markup=None)
             except error.Unauthorized:
                 return STOPPING
-            Restore.restore_doctor_msg(
-                context, chat_id=update.effective_chat.id)
+            # Если бот перезапускался
+            context.user_data['user'] = users_list[update.effective_user.id]
+            DoctorJob.default_job(update, context)
             return STOPPING
         if res == BasicUser.USER_IS_NOT_REGISTERED:
             if type(context.user_data['user']) is BasicUser:
@@ -749,8 +746,9 @@ class RegionRegistrationDialog(DoctorRegistrationDialog):
                                               reply_markup=None)
             except error.Unauthorized:
                 return STOPPING
-            Restore.restore_region_msg(
-                context, chat_id=update.effective_chat.id)
+                # Если бот перезапускался
+            context.user_data['user'] = users_list[update.effective_user.id]
+            RegionJob.default_job(update, context)
             return STOPPING
         if res == BasicUser.USER_IS_NOT_REGISTERED:
             if type(context.user_data['user']) is BasicUser:
@@ -855,7 +853,9 @@ class UniRegistrationDialog(ConversationHandler):
                                               reply_markup=None)
             except error.Unauthorized:
                 return STOPPING
-            Restore.restore_uni_msg(context, chat_id=update.effective_chat.id)
+            # Если бот перезапускался
+            context.user_data['user'] = users_list[update.effective_user.id]
+            UniJob.default_job(update, context)
             return STOPPING
         if res == BasicUser.USER_IS_NOT_REGISTERED:
             if type(context.user_data['user']) is BasicUser:

@@ -1,11 +1,18 @@
 from telegram import Update, error
 from telegram.ext import CallbackContext
 
+from modules.users_list import users_list
+
 
 def not_registered_users(func):
     def decorated_func(update: Update, context: CallbackContext,
                        *args, **kwargs):
-        user = context.user_data.get('user')
+
+        # Если бот перезапускался
+        if not (user := context.user_data.get('user')):
+            user = context.user_data['user'] = users_list[
+                update.effective_user.id]
+
         if not (user and user.registered()):
             return func(update, context, *args, **kwargs)
         return just_for_not_registered_msg(update)
@@ -17,7 +24,12 @@ def registered_patient(func):
     def decorated_func(update: Update, context: CallbackContext,
                        *args, **kwargs):
         from modules.users_classes import PatientUser
-        user = context.user_data.get('user')
+
+        # Если бот перезапускался
+        if not (user := context.user_data.get('user')):
+            user = context.user_data['user'] = users_list[
+                update.effective_user.id]
+
         # Если пользователь - пациент, зарегистрирован и не исключен
         if type(user) is PatientUser and user.registered() and user.member:
             return func(update, context, *args, **kwargs)
@@ -56,7 +68,11 @@ def _parametrized(dec):
 def registered_patronages(func, *d_args, **d_kwargs):
     def decorator(update: Update, context: CallbackContext, *args, **kwargs):
         from modules.users_classes import DoctorUser, RegionUser, UniUser
-        user = context.user_data.get('user')
+
+        # Если бот перезапускался
+        if not (user := context.user_data.get('user')):
+            user = context.user_data['user'] = users_list[
+                update.effective_user.id]
 
         dec_args = [DoctorUser, RegionUser, UniUser] if not d_args else d_args
 

@@ -63,24 +63,7 @@ class BasicUser:
 
     def check_user_reg(self) -> int:
         """Определение к кому принадлежит пользователь"""
-
-        # Проверяем сначала список, чтобы не тратить время на запрос в бд
-        user_from_list = users_list[self.chat_id]
-
-        if user_from_list:
-            if type(user_from_list) is PatientUser:
-                # Если был исключен до перезагрузки бота
-                if not user_from_list.member:
-                    return self.USER_EXCLUDED
-                return self.USER_IS_PATIENT
-            if type(user_from_list) is DoctorUser:
-                return self.USER_IS_DOCTOR
-            if type(user_from_list) is RegionUser:
-                return self.USER_IS_REGION
-            if type(user_from_list) is UniUser:
-                return self.USER_IS_UNI
-
-        # Если в списке не нашли, то ищем в бд
+        # Ищем в бд
         patient = get_patient_by_chat_id(self.chat_id)
         if patient:
             # Если пациент не участвует в исследовании

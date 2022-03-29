@@ -2,16 +2,15 @@ import logging
 import os
 
 from telegram import Update, error
-from telegram.ext import (CallbackQueryHandler, CommandHandler, Defaults,
+from telegram.ext import (CommandHandler, Defaults,
                           Filters, MessageHandler, Updater, CallbackContext)
 
 from modules.notification_dailogs import DataCollectionDialog, PillTakingDialog
 from modules.patronage_dialogs import BaseJob
-from modules.restore import (Restore, patient_restore_handler,
-                             doctor_restore_handler, region_restore_handler,
-                             uni_restore_handler)
+from modules.restore import Restore
 from modules.settings_dialogs import SettingsDialog
 from modules.start_dialogs import StartDialog
+from modules.users_list import users_list
 
 from tools.tools import get_from_env
 
@@ -31,23 +30,27 @@ def help_msg(update: Update, context: CallbackContext):
     from modules.users_classes import BasicUser, PatientUser, DoctorUser, \
         RegionUser, UniUser
     try:
-        if not context.user_data.get('user'):
+        # Если бот перезапускался
+        if not (user := context.user_data.get('user')):
+            user = context.user_data['user'] = users_list[
+                update.effective_user.id]
+        if not user:
             update.message.reply_text(
                 "Справка.\nЕсли Вы ранее не регистрировались, то чтобы начать "
                 "работу с ботом, введите: /start\n\nЕсли Вы уже "
                 "регистрировались, то восстановите доступ c помощью "
                 "соответствующего сообщения.")
-        elif type(context.user_data.get('user')) is BasicUser:
+        elif type(user) is BasicUser:
             update.message.reply_text(
                 "Справка.\nЧтобы получить больше возможностей "
                 "зарегистрируйтесь.")
-        elif type(context.user_data.get('user')) is PatientUser:
+        elif type(user) is PatientUser:
             update.message.reply_text("Справка. Команды Для пациента.")
-        elif type(context.user_data.get('user')) is DoctorUser:
+        elif type(user) is DoctorUser:
             update.message.reply_text("Справка. Команды для врача.")
-        elif type(context.user_data.get('user')) is RegionUser:
+        elif type(user) is RegionUser:
             update.message.reply_text("Справка. Команды для сотрудника.")
-        elif type(context.user_data.get('user')) is UniUser:
+        elif type(user) is UniUser:
             update.message.reply_text("Справка. Команды для ВолГМУ.")
     except error.Unauthorized:
         pass
@@ -76,15 +79,6 @@ def main():
     dp.add_handler(SettingsDialog())
 
     dp.add_handler(BaseJob())
-
-    dp.add_handler(CallbackQueryHandler(patient_restore_handler,
-                                        pattern='^RESTORE_PATIENT$'))
-    dp.add_handler(CallbackQueryHandler(doctor_restore_handler,
-                                        pattern='^RESTORE_DOCTOR$'))
-    dp.add_handler(CallbackQueryHandler(region_restore_handler,
-                                        pattern='^RESTORE_REGION$'))
-    dp.add_handler(CallbackQueryHandler(uni_restore_handler,
-                                        pattern='^RESTORE_UNI$'))
 
     dp.add_handler(CommandHandler("help", help_msg))
     dp.add_handler(MessageHandler(Filters.regex('Справка$'), help_msg))
