@@ -159,8 +159,9 @@ def deleting_pre_start_msg_task(context: CallbackContext):
     data: Optional[Dict] = job.context
     user = data['user']
     try:
-        context.bot.delete_message(user.chat_id, user.msg_to_del.message_id)
-        user.msg_to_del = None
+        if user.msg_to_del:
+            context.bot.delete_message(user.chat_id, user.msg_to_del.message_id)
+            user.msg_to_del = None
 
         user.clear_responses()
         user.save_patient_record()

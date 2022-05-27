@@ -1,5 +1,7 @@
 import logging
 import os
+import atexit
+from tools.atexit import clear_all_notification
 
 from telegram import Update, error
 from telegram.ext import (CommandHandler, Defaults,
@@ -67,6 +69,9 @@ def main():
                                       'connect_timeout': 20})
 
     dp = updater.dispatcher
+
+    # При заверении бота удаляем все сообщения с уведомлениями из чатов
+    atexit.register(clear_all_notification, CallbackContext(dp))
 
     # Восстановление уведомлений после перезапуска бота
     Restore(dp)

@@ -1,4 +1,5 @@
 import datetime as dt
+import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, error
 from telegram.ext import (CallbackContext, CallbackQueryHandler,
@@ -96,6 +97,10 @@ class PillTakingDialog(ConversationHandler):
             user.msg_to_del = msg
         except error.Unauthorized:
             pass
+        except error.BadRequest as e:
+            logging.warning(f'CANT SEND NOTIFICATION TO '
+                            f'PATIENT-{user.chat_id}. '
+                            f'CHAT NOT FOUND. \nMORE: {e}')
         # Таск на "само-удаление" сообщения
         remove_job_if_exists(f'{user.chat_id}-pre_start_msg', context)
         context.job_queue.run_once(
