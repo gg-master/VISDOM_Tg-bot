@@ -2,6 +2,8 @@ FROM python:3.9-slim
 
 WORKDIR /PYTHON_APPS
 
+RUN pip install cryptography
+
 RUN addgroup --system docker
 RUN adduser --system --group docker
 RUN chown -R docker /PYTHON_APPS
