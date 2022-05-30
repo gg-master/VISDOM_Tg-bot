@@ -1,6 +1,5 @@
 import csv
 import os
-import re
 from typing import Any
 
 from openpyxl import Workbook, styles
@@ -12,7 +11,6 @@ from data.doctor import Doctor
 from data.record import Record
 from data.region import Region
 from data.university import University
-from sqlalchemy import func
 
 db_session.global_init()
 
@@ -243,7 +241,9 @@ def make_file_by_patient_user_code(patient_code):
         for j in range(7):
             ws.cell(row=i, column=j + 1, value=record[j])
         i += 1
-    wb.save(filename=f'static/{patient_code}_data.xlsx')
+    wb.save(filename=os.path.join(
+        os.path.abspath(os.curdir),
+        os.path.join('static', f'{patient_code}_data.xlsx')))
 
 
 def make_file_patients(user_code=''):
@@ -265,8 +265,8 @@ def make_file_patients(user_code=''):
                'Диастолическое давление', 'Частота сердечных сокращений',
                'Время приема таблеток и измерений', 'Часовой пояс',
                'Время ответа', 'Комментарий']
-    with open('static/statistics.csv', 'w', encoding='utf-8', newline='') as \
-            csvfile:
+    with open(os.path.join('static', f'statistics.csv'), 'w',
+              encoding='utf-8', newline='') as csvfile:
         writer = csv.writer(csvfile, delimiter=';', quotechar='"',
                             quoting=csv.QUOTE_MINIMAL)
         writer.writerow(headers)
@@ -295,7 +295,9 @@ def make_patient_list(user_code=''):
         cell = ws.cell(row=i + 1, column=1, value=patients_user_codes[i][0])
         if not patients_user_codes[i][1]:
             cell.fill = styles.PatternFill('solid', fgColor='FF0000')
-    wb.save(filename=f'static/Список пациентов.xlsx')
+    wb.save(filename=os.path.join(
+        os.path.abspath(os.curdir),
+        os.path.join('static', f'Список пациентов.xlsx')))
 
 
 """Accept time functions"""

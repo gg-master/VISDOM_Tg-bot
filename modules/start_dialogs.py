@@ -792,10 +792,7 @@ class RegionRegistrationDialog(DoctorRegistrationDialog):
         try:
             context.user_data['user'].validate_code()
         except UserExists as e:
-            kb = ReplyKeyboardMarkup([[e.args[1]]], one_time_keyboard=True,
-                                     row_width=1, resize_keyboard=True)
-            update.effective_chat.send_message(text=str(e.args[0]),
-                                               reply_markup=kb)
+            update.effective_chat.send_message(text=str(e.args[0]))
             context.user_data[START_OVER] = True
             return cls.conf_code(update, context)
         except (RegionNotFound, ValueError) as e:
