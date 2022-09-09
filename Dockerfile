@@ -13,4 +13,9 @@ COPY requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 COPY . /PYTHON_APPS
 
+USER root
+RUN mkdir -p /PYTHON_APPS/static/
+RUN chmod -R 777 /PYTHON_APPS/static/
+USER docker
+
 ENTRYPOINT ["python", "main.py"]
